@@ -61,15 +61,6 @@ npm run dev            # http://localhost:3000 → /setup to create the admin
 
 First visit redirects to `/setup` to create the admin, then `/login`.
 
-### Docker
-
-```bash
-docker compose up -d --build   # → http://localhost:3000
-```
-
-Secrets (`SESSION_SECRET`, `CRON_SECRET`) auto-generate on first start and
-persist to the volume — no config needed. Full guide: [DOCKER.md](DOCKER.md).
-
 ### Add a monitor
 
 New monitor → point at any `/actuator/health` URL. No live backend? Use the
@@ -82,6 +73,44 @@ npm run mock           # http://localhost:4100/health  (edit example/health-chec
 Add a monitor at `http://localhost:4100/health`. Simulate conditions via query:
 `?status=DOWN`, `?disk=95`, `?drop=admin-console-svc`, `?down=redis`,
 `?delay=3000`, `?http=503` (combine freely).
+
+## Deployment (Docker Compose)
+
+The recommended way to self-host. One container, one volume, zero required config.
+
+```bash
+docker compose up -d --build     # → http://localhost:3000
+```
+
+On first start the container automatically:
+
+1. **Generates `SESSION_SECRET` + `CRON_SECRET`** and persists them to the volume
+   (`/data/.session_secret`, `/data/.cron_secret`) — stable across restarts, so
+   logins don't drop. Set them in `.env` only if you want to pin your own.
+2. Runs **`db:push`** to create/update the SQLite schema on the volume.
+3. Starts the server; the **in-process scheduler runs the checks** — no external
+   cron needed.
+
+```bash
+# change the published port
+PORT=8080 docker compose up -d --build
+
+# logs / restart / update / stop
+docker compose logs -f
+docker compose restart
+git pull && docker compose up -d --build
+docker compose down            # keep data
+docker compose down -v         # wipe data volume
+```
+
+- **Persistence**: everything lives in the `apm-data` volume (`/data/apm.db`).
+  Back up with `docker compose cp apm:/data/apm.db ./apm-backup.db`.
+- **One replica only** — SQLite is single-writer. For horizontal scale, swap the
+  Drizzle driver for a hosted DB.
+- Behind a reverse proxy (Nginx/Caddy/Traefik) set `APP_BASE_URL` to the public URL.
+
+Full build internals, `docker run` (without Compose), secret rotation, and
+troubleshooting: **[DOCKER.md](DOCKER.md)**.
 
 ## Scripts
 
@@ -113,12 +142,14 @@ Add a monitor at `http://localhost:4100/health`. Simulate conditions via query:
 
 | Var | Required | Notes |
 |---|---|---|
-| `DATABASE_URL` | yes | SQLite path (default `./data/apm.db`) |
-| `SESSION_SECRET` | yes | ≥ 32 chars, signs the session cookie |
-| `CRON_SECRET` | prod | protects `/api/cron/tick` |
+| `DATABASE_URL` | yes | SQLite path (default `./data/apm.db`; Compose sets `/data/apm.db`) |
+| `SESSION_SECRET` | dev only | ≥ 32 chars, signs the session cookie. **Auto-generated under Docker.** |
+| `CRON_SECRET` | optional | protects `/api/cron/tick`. **Auto-generated under Docker.** |
 | `APP_BASE_URL` | no | used in notification links |
 
-Resend API keys are stored **per email channel** in the UI — not in env.
+Running locally (`npm run dev`) you must set `SESSION_SECRET` yourself; under
+Docker it (and `CRON_SECRET`) are generated on first start. Resend API keys are
+stored **per email channel** in the UI — not in env.
 
 ## Project layout
 
