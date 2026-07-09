@@ -1,0 +1,443 @@
+import { getDb, schema } from "@/lib/db/client";
+import { and, eq, lte, desc } from "drizzle-orm";
+import { parseHealth, type ParsedHealth } from "./parser";
+import { isMonitorMuted } from "./maintenance";
+import { dispatch } from "./notifier";
+import { getEffectiveThresholds } from "./alerts";
+import {
+  evaluateRules,
+  alertKey,
+  type DesiredAlert,
+  type AlertKind,
+} from "./rules";
+import type { Monitor } from "@/lib/db/schema";
+
+interface FetchResult {
+  overall: string;
+  parsed: ParsedHealth | null;
+  responseMs: number;
+  httpStatus: number | null;
+  errorText: string | null;
+  rawJson: unknown;
+}
+
+async function fetchHealth(monitor: Monitor): Promise<FetchResult> {
+  const started = Date.now();
+  const headers: Record<string, string> = { accept: "application/json" };
+  if (monitor.authHeaderName && monitor.authHeaderValue) {
+    headers[monitor.authHeaderName] = monitor.authHeaderValue;
+  }
+  try {
+    const res = await fetch(monitor.url, {
+      method: monitor.method,
+      headers,
+      signal: AbortSignal.timeout(monitor.timeoutMs),
+      cache: "no-store",
+    });
+    const responseMs = Date.now() - started;
+    let body: unknown = null;
+    try {
+      body = await res.json();
+    } catch {
+      body = null;
+    }
+    if (!res.ok || !body) {
+      return {
+        overall: "DOWN",
+        parsed: null,
+        responseMs,
+        httpStatus: res.status,
+        errorText: !res.ok ? `HTTP ${res.status}` : "invalid json body",
+        rawJson: body,
+      };
+    }
+    const parsed = parseHealth(body);
+    return {
+      overall: parsed.overall,
+      parsed,
+      responseMs,
+      httpStatus: res.status,
+      errorText: null,
+      rawJson: body,
+    };
+  } catch (err) {
+    return {
+      overall: "DOWN",
+      parsed: null,
+      responseMs: Date.now() - started,
+      httpStatus: null,
+      errorText: (err as Error).message ?? String(err),
+      rawJson: null,
+    };
+  }
+}
+
+async function persistCheck(
+  monitor: Monitor,
+  result: FetchResult,
+): Promise<{ checkId: number; componentStatuses: Map<string, string> }> {
+  const db = getDb();
+  const [row] = await db
+    .insert(schema.checks)
+    .values({
+      monitorId: monitor.id,
+      overallStatus: result.overall,
+      responseMs: result.responseMs,
+      httpStatus: result.httpStatus ?? undefined,
+      errorText: result.errorText ?? undefined,
+      rawJson: (result.rawJson as object) ?? undefined,
+    })
+    .returning({ id: schema.checks.id });
+  const checkId = row.id;
+
+  const compMap = new Map<string, string>();
+  if (result.parsed) {
+    const { components, disks, services } = result.parsed;
+    if (components.length > 0) {
+      await db.insert(schema.componentStatuses).values(
+        components.map((c) => ({
+          checkId,
+          path: c.path,
+          status: c.status,
+          details: (c.details as object) ?? undefined,
+        })),
+      );
+      for (const c of components) compMap.set(c.path, c.status);
+    }
+    if (disks.length > 0) {
+      await db.insert(schema.diskSnapshots).values(
+        disks.map((d) => ({
+          checkId,
+          diskPath: d.diskPath ?? undefined,
+          totalBytes: d.totalBytes,
+          freeBytes: d.freeBytes,
+          usedPct: d.usedPct,
+          thresholdBytes: d.thresholdBytes ?? undefined,
+        })),
+      );
+    }
+    if (services.length > 0) {
+      await db.insert(schema.serviceSnapshots).values(
+        services.map((s) => ({
+          checkId,
+          source: s.source,
+          serviceName: s.serviceName,
+          instanceCount: s.instanceCount,
+        })),
+      );
+    }
+  }
+
+  return { checkId, componentStatuses: compMap };
+}
+
+async function loadRecentChecks(monitorId: number, limit: number) {
+  const db = getDb();
+  const rows = await db
+    .select({
+      checkedAt: schema.checks.checkedAt,
+      overallStatus: schema.checks.overallStatus,
+      responseMs: schema.checks.responseMs,
+    })
+    .from(schema.checks)
+    .where(eq(schema.checks.monitorId, monitorId))
+    .orderBy(desc(schema.checks.id))
+    .limit(limit);
+  return rows;
+}
+
+const SOURCE_PRIORITY: Record<string, number> = {
+  eureka: 3,
+  discoveryComposite: 2,
+  reactiveDiscoveryClients: 1,
+};
+
+/**
+ * A service is reported under different casing by different discovery sources
+ * (Eureka `applications` = UPPERCASE, discoveryClient `services` = lowercase).
+ * They are the same service — canonicalise to a single key to avoid duplicates.
+ */
+function canonicalServiceName(name: string): string {
+  return name.trim().toUpperCase();
+}
+
+/**
+ * Persist every service the health check reports into a per-monitor registry.
+ * First sighting seeds the baseline (firstSeenAt). On each run, services in the
+ * response are marked present; registry entries no longer reported are marked
+ * absent. A tracked service that has been absent past the grace window counts
+ * as DOWN and is returned for alerting. Service names are canonicalised
+ * (case-insensitive) so the same service across sources is one entry.
+ */
+async function syncServiceRegistry(
+  monitorId: number,
+  parsed: ParsedHealth | null,
+  graceSeconds: number,
+  now: Date,
+): Promise<string[]> {
+  const db = getDb();
+
+  // De-dupe detected services by canonical name, keep highest-priority source.
+  const detected = new Map<string, string>();
+  for (const s of parsed?.services ?? []) {
+    const key = canonicalServiceName(s.serviceName);
+    const prev = detected.get(key);
+    if (!prev || (SOURCE_PRIORITY[s.source] ?? 0) > (SOURCE_PRIORITY[prev] ?? 0)) {
+      detected.set(key, s.source);
+    }
+  }
+
+  // Load registry, collapse any legacy mixed-case duplicates into one row.
+  let registry = await db
+    .select()
+    .from(schema.monitorServices)
+    .where(eq(schema.monitorServices.monitorId, monitorId));
+
+  const byCanon = new Map<string, typeof registry>();
+  for (const row of registry) {
+    const key = canonicalServiceName(row.serviceName);
+    (byCanon.get(key) ?? byCanon.set(key, []).get(key)!).push(row);
+  }
+  let mutated = false;
+  for (const [key, rows] of byCanon) {
+    if (rows.length > 1) {
+      // keep the earliest, drop the rest (merge duplicates)
+      const [keep, ...dups] = rows.sort((a, b) => a.id - b.id);
+      for (const d of dups) {
+        await db
+          .delete(schema.monitorServices)
+          .where(eq(schema.monitorServices.id, d.id));
+      }
+      if (keep.serviceName !== key) {
+        await db
+          .update(schema.monitorServices)
+          .set({ serviceName: key })
+          .where(eq(schema.monitorServices.id, keep.id));
+      }
+      mutated = true;
+    } else if (rows[0].serviceName !== key) {
+      await db
+        .update(schema.monitorServices)
+        .set({ serviceName: key })
+        .where(eq(schema.monitorServices.id, rows[0].id));
+      mutated = true;
+    }
+  }
+  if (mutated) {
+    registry = await db
+      .select()
+      .from(schema.monitorServices)
+      .where(eq(schema.monitorServices.monitorId, monitorId));
+  }
+
+  // Upsert present services (insert on first sight = seed baseline).
+  for (const [serviceName, source] of detected) {
+    await db
+      .insert(schema.monitorServices)
+      .values({
+        monitorId,
+        serviceName,
+        source,
+        present: true,
+        tracked: true,
+        firstSeenAt: now,
+        lastSeenAt: now,
+      })
+      .onConflictDoUpdate({
+        target: [
+          schema.monitorServices.monitorId,
+          schema.monitorServices.serviceName,
+        ],
+        set: { present: true, source, lastSeenAt: now },
+      });
+  }
+
+  // Only reconcile absences when this check actually returned a registry.
+  const down: string[] = [];
+  if (detected.size > 0) {
+    const graceMs = graceSeconds * 1000;
+    for (const row of registry) {
+      const key = canonicalServiceName(row.serviceName);
+      if (detected.has(key)) continue;
+      // absent this run
+      if (row.present) {
+        await db
+          .update(schema.monitorServices)
+          .set({ present: false })
+          .where(eq(schema.monitorServices.id, row.id));
+      }
+      const absentMs = now.getTime() - row.lastSeenAt.getTime();
+      if (row.tracked && absentMs >= graceMs) down.push(key);
+    }
+  }
+  return down;
+}
+
+/**
+ * Reconcile open incidents against the alert rules' desired state.
+ * Opens incidents that should exist, resolves ones that no longer apply,
+ * and refreshes metric/reason on ones that persist.
+ */
+async function reconcileIncidents(
+  monitor: Monitor,
+  result: FetchResult,
+  now: Date,
+): Promise<void> {
+  const db = getDb();
+  const thresholds = await getEffectiveThresholds(monitor);
+  const window = Math.max(thresholds.latencyWindow, thresholds.downForMinutes + 2, 10);
+  const recentChecks = await loadRecentChecks(monitor.id, window);
+
+  const eurekaServices =
+    result.parsed?.services
+      .filter((s) => s.source === "eureka")
+      .map((s) => ({
+        serviceName: s.serviceName,
+        instanceCount: s.instanceCount,
+      })) ?? [];
+
+  // Persist/refresh the per-monitor service registry and get services that
+  // are tracked but have been absent past the grace window (= down).
+  const downServices = await syncServiceRegistry(
+    monitor.id,
+    result.parsed,
+    thresholds.serviceGraceSeconds,
+    now,
+  );
+  const eurekaMissing = thresholds.eurekaDropAlert ? downServices : [];
+
+  const desiredList: DesiredAlert[] = evaluateRules({
+    now,
+    thresholds,
+    recentChecks,
+    components: result.parsed?.components.map((c) => ({
+      path: c.path,
+      status: c.status,
+    })) ?? [],
+    disks: result.parsed?.disks.map((d) => ({
+      path: d.path,
+      usedPct: d.usedPct,
+    })) ?? [],
+    eurekaServices,
+    eurekaMissing,
+  });
+  const desired = new Map(desiredList.map((a) => [alertKey(a), a]));
+
+  const openRows = await db
+    .select()
+    .from(schema.incidents)
+    .where(
+      and(
+        eq(schema.incidents.monitorId, monitor.id),
+        eq(schema.incidents.resolved, false),
+      ),
+    );
+  const open = new Map(
+    openRows.map((r) => [
+      alertKey({ kind: r.kind as AlertKind, componentPath: r.componentPath }),
+      r,
+    ]),
+  );
+
+  const muted = await isMonitorMuted(monitor.id, now);
+
+  // Open new alerts.
+  for (const [key, a] of desired) {
+    if (open.has(key)) continue;
+    await db.insert(schema.incidents).values({
+      monitorId: monitor.id,
+      componentPath: a.componentPath ?? undefined,
+      kind: a.kind,
+      severity: a.severity,
+      metricValue: a.metricValue ?? undefined,
+      threshold: a.threshold ?? undefined,
+      reason: a.reason,
+      startedAt: now,
+      resolved: false,
+      suppressed: muted,
+    });
+    if (!muted) {
+      await dispatch({
+        kind: "down",
+        monitor,
+        componentPath: a.componentPath,
+        startedAt: now,
+        severity: a.severity,
+        alertKind: a.kind,
+        reason: a.reason,
+        metricValue: a.metricValue,
+        threshold: a.threshold,
+      });
+    }
+  }
+
+  // Resolve or refresh existing.
+  for (const [key, row] of open) {
+    const still = desired.get(key);
+    if (!still) {
+      await db
+        .update(schema.incidents)
+        .set({ resolved: true, endedAt: now })
+        .where(eq(schema.incidents.id, row.id));
+      if (!row.suppressed) {
+        await dispatch({
+          kind: "resolved",
+          monitor,
+          componentPath: row.componentPath,
+          startedAt: row.startedAt,
+          endedAt: now,
+          severity: (row.severity as "warning" | "critical") ?? "critical",
+          alertKind: row.kind as AlertKind,
+          reason: row.reason,
+          metricValue: row.metricValue,
+          threshold: row.threshold,
+        });
+      }
+    } else {
+      // refresh live metric/reason/severity without re-notifying
+      await db
+        .update(schema.incidents)
+        .set({
+          metricValue: still.metricValue ?? undefined,
+          threshold: still.threshold ?? undefined,
+          reason: still.reason,
+          severity: still.severity,
+        })
+        .where(eq(schema.incidents.id, row.id));
+    }
+  }
+}
+
+export async function runCheck(monitor: Monitor): Promise<void> {
+  const db = getDb();
+  const now = new Date();
+  const result = await fetchHealth(monitor);
+  await persistCheck(monitor, result);
+  await reconcileIncidents(monitor, result, now);
+  await db
+    .update(schema.monitors)
+    .set({
+      lastStatus: result.overall,
+      nextCheckAt: new Date(now.getTime() + monitor.intervalSeconds * 1000),
+      updatedAt: now,
+    })
+    .where(eq(schema.monitors.id, monitor.id));
+}
+
+export async function runDueChecks(): Promise<{ ran: number }> {
+  const db = getDb();
+  const now = new Date();
+  const due = await db
+    .select()
+    .from(schema.monitors)
+    .where(
+      and(
+        eq(schema.monitors.enabled, true),
+        lte(schema.monitors.nextCheckAt, now),
+      ),
+    )
+    .limit(50);
+
+  await Promise.allSettled(due.map((m) => runCheck(m)));
+  return { ran: due.length };
+}

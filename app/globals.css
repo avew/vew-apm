@@ -1,26 +1,212 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  /* Warm, paper-clean light surface (Profound-style) */
+  --color-app-bg: #f6f5f2;
+  --color-app-surface: #ffffff;
+  --color-app-border: #e9e7e1;
+  --color-app-muted: #74716a;
+
+  /* Muted, restrained accent (used sparingly for active/links) */
+  --color-brand-50: #eef1f4;
+  --color-brand-500: #4a5a6a;
+  --color-brand-600: #3a4753;
+  --color-brand-700: #2b343d;
+
+  /* Flat, near-shadowless — cleanliness over depth */
+  --shadow-card: 0 1px 2px rgb(17 17 17 / 0.03);
+  --shadow-card-hover: 0 6px 20px rgb(17 17 17 / 0.06);
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: var(--color-app-bg);
+  --foreground: #1a1917;
+  --surface: var(--color-app-surface);
+  --border: var(--color-app-border);
+  --muted: var(--color-app-muted);
+  /* near-black primary CTA (light) */
+  --btn-primary-bg: #1a1917;
+  --btn-primary-bg-hover: #000000;
+  --btn-primary-fg: #ffffff;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
+/* Auto (default): follow OS preference. */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  :root:not([data-theme="light"]) {
+    --background: #0b0b0c;
+    --foreground: #ededec;
+    --surface: #151517;
+    --border: #262528;
+    --muted: #8f8c86;
+    --btn-primary-bg: #ffffff;
+    --btn-primary-bg-hover: #e6e5e3;
+    --btn-primary-fg: #141414;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Explicit user choice — wins over OS preference. */
+:root[data-theme="light"] {
+  --background: var(--color-app-bg);
+  --foreground: #1a1917;
+  --surface: var(--color-app-surface);
+  --border: var(--color-app-border);
+  --muted: var(--color-app-muted);
+  --btn-primary-bg: #1a1917;
+  --btn-primary-bg-hover: #000000;
+  --btn-primary-fg: #ffffff;
+}
+:root[data-theme="dark"] {
+  --background: #0b0b0c;
+  --foreground: #ededec;
+  --surface: #151517;
+  --border: #262528;
+  --muted: #8f8c86;
+  --btn-primary-bg: #ffffff;
+  --btn-primary-bg-hover: #e6e5e3;
+  --btn-primary-fg: #141414;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  body {
+    /* flat, clean — no gradient */
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    letter-spacing: -0.01em;
+  }
+  ::selection {
+    background: rgb(26 25 23 / 0.12);
+  }
+}
+
+@layer components {
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 1rem;
+    box-shadow: var(--shadow-card);
+  }
+  .card-hover {
+    transition:
+      box-shadow 0.2s ease,
+      border-color 0.2s ease;
+  }
+  .card-hover:hover {
+    box-shadow: var(--shadow-card-hover);
+    border-color: color-mix(in srgb, var(--foreground) 18%, var(--border));
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    border-radius: 0.625rem;
+    padding: 0.5rem 0.875rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.15s ease;
+    cursor: pointer;
+  }
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .btn-primary {
+    background: var(--btn-primary-bg);
+    color: var(--btn-primary-fg);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--btn-primary-bg-hover);
+  }
+  .btn-ghost {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--foreground);
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background: rgb(0 0 0 / 0.03);
+  }
+  .btn-danger {
+    background: var(--surface);
+    border: 1px solid rgb(239 68 68 / 0.4);
+    color: #dc2626;
+  }
+  .btn-danger:hover:not(:disabled) {
+    background: rgb(239 68 68 / 0.08);
+  }
+
+  .field-input {
+    margin-top: 0.25rem;
+    width: 100%;
+    border-radius: 0.625rem;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    transition:
+      border-color 0.15s ease,
+      box-shadow 0.15s ease;
+  }
+  .field-input:focus {
+    outline: none;
+    border-color: color-mix(in srgb, var(--foreground) 45%, var(--border));
+    box-shadow: 0 0 0 3px rgb(26 25 23 / 0.08);
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    border-radius: 9999px;
+    padding: 0.125rem 0.5rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+  .badge-up {
+    background: rgb(16 185 129 / 0.12);
+    color: #059669;
+  }
+  .badge-down {
+    background: rgb(239 68 68 / 0.12);
+    color: #dc2626;
+  }
+  .badge-warn {
+    background: rgb(245 158 11 / 0.14);
+    color: #d97706;
+  }
+  .badge-muted {
+    background: rgb(107 114 128 / 0.14);
+    color: var(--muted);
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .btn-ghost:hover:not(:disabled) {
+    background: rgb(255 255 255 / 0.04);
+  }
+  .badge-up {
+    color: #34d399;
+  }
+  .badge-down {
+    color: #f87171;
+  }
+  .badge-warn {
+    color: #fbbf24;
+  }
+}
+
+/* Heartbeat bar appearance (home cards) */
+html[data-hb="none"] .heartbeat-bar {
+  display: none;
+}
+html[data-hb="compact"] .heartbeat-bar {
+  height: 1rem;
 }
