@@ -9,8 +9,10 @@ services:
     environment:
       # SQLite file on the persistent volume
       DATABASE_URL: /data/apm.db
-      # required: signs the session cookie (>= 32 chars). Set in .env
-      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env}
+      # Optional. If unset, the container auto-generates and persists them to
+      # the volume on first start. Provide here (via .env) only to pin your own.
+      SESSION_SECRET: ${SESSION_SECRET:-}
+      CRON_SECRET: ${CRON_SECRET:-}
       # optional
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost:3000}
       # in-process scheduler tick (ms)

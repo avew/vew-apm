@@ -6,27 +6,24 @@ built-in scheduler runs the checks inside the container (no external cron needed
 ## Prerequisites
 
 - Docker + Docker Compose v2 (`docker compose version`)
-- A `SESSION_SECRET` (≥ 32 chars): `openssl rand -hex 32`
 
-## 1. Configure
+## 1. Configure — nothing required
 
-Compose reads `.env` from the project root for variable substitution. Create it:
+**Secrets are auto-generated.** On first start the container creates
+`SESSION_SECRET` and `CRON_SECRET`, stores them on the data volume
+(`/data/.session_secret`, `/data/.cron_secret`), and reuses them on every
+restart — so sessions stay valid. No manual setup needed.
+
+Optional overrides (only if you want to pin your own, e.g. from a K8s/CI secret):
 
 ```bash
-cp .env.example .env
+cp .env.example .env      # then optionally set SESSION_SECRET / CRON_SECRET
 ```
 
-Edit `.env` — the only value Compose needs is `SESSION_SECRET`:
-
-```dotenv
-SESSION_SECRET="<paste 32+ char random string>"
-# optional
-APP_BASE_URL="http://localhost:3000"
-# APM_SCHEDULER_TICK_MS=5000
-```
-
-> `DATABASE_URL` is set by Compose to `/data/apm.db` (the volume) — don't override it.
-> Notification secrets (Resend key, Telegram token) are entered in the UI, not here.
+> If you set `SESSION_SECRET`/`CRON_SECRET` (env or `.env`), that value wins and
+> the container won't generate one.
+> `DATABASE_URL` is set by Compose to `/data/apm.db` — don't override it.
+> Notification secrets (Resend key, Telegram token) are entered in the UI.
 
 ## 2. Build & run
 
@@ -34,8 +31,8 @@ APP_BASE_URL="http://localhost:3000"
 docker compose up -d --build
 ```
 
-What happens on start: the container runs `db:push` (creates/updates the SQLite
-schema on the volume), then `next start`. First run creates an empty DB.
+On start the entrypoint provisions the secrets (if absent), runs `db:push`
+(creates/updates the SQLite schema on the volume), then `next start`.
 
 Open **http://localhost:3000** → you'll be sent to `/setup` to create the admin,
 then `/login`.
@@ -62,9 +59,8 @@ on the **host** from inside the container, use `http://host.docker.internal:PORT
 ```bash
 docker build -t vew-apm:latest .
 
+# secrets auto-generate on the volume; no -e needed
 docker run -d --name vew-apm -p 3000:3000 \
-  -e SESSION_SECRET="$(openssl rand -hex 32)" \
-  -e DATABASE_URL=/data/apm.db \
   -v vew-apm-data:/data \
   vew-apm:latest
 ```
@@ -109,7 +105,8 @@ docker compose start
 
 - **Secrets**: `.env` and `data/` are gitignored and excluded from the image via
   `.dockerignore` — they never bake into a layer.
-- **`SESSION_SECRET not set`** on boot → you didn't set it in `.env`.
+- **Rotating secrets**: delete `/data/.session_secret` (invalidates all sessions)
+  and restart — a new one is generated. Or set `SESSION_SECRET` explicitly.
 - **Reverse proxy / TLS**: put Nginx/Caddy/Traefik in front and set `APP_BASE_URL`
   to the public URL. The app speaks plain HTTP on port 3000.
 - **Multi-instance**: SQLite is single-writer; run **one** replica. For horizontal

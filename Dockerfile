@@ -31,11 +31,12 @@ ENV DATABASE_URL="/data/apm.db"
 # carry the fully-built app (node_modules already has the compiled .node)
 COPY --from=builder /app ./
 
-# sqlite lives on a mounted volume
-RUN mkdir -p /data
+# sqlite + generated secrets live on a mounted volume
+RUN mkdir -p /data && chmod +x docker/entrypoint.sh
 VOLUME ["/data"]
 
 EXPOSE 3000
 
-# ensure schema exists, then start (in-process scheduler runs the checks)
-CMD ["sh", "-c", "npm run db:push && npm run start -- -H 0.0.0.0 -p 3000"]
+# entrypoint auto-generates SESSION_SECRET/CRON_SECRET (persisted to /data) if
+# not supplied via env, runs db:push, then starts the server.
+CMD ["sh", "docker/entrypoint.sh"]
