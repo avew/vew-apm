@@ -2,18 +2,27 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Settings, LayoutGrid, Siren } from "lucide-react";
+import { useT } from "@/lib/i18n-client";
+import type { MsgKey } from "@/lib/i18n";
 
-const LINKS = [
-  { href: "/", label: "Monitors", icon: LayoutGrid, exact: true },
-  { href: "/incidents", label: "Incidents", icon: Siren, badge: true },
-  { href: "/settings", label: "Settings", icon: Settings, exact: false },
+const LINKS: {
+  href: string;
+  key: MsgKey;
+  icon: typeof LayoutGrid;
+  exact: boolean;
+  badge?: boolean;
+}[] = [
+  { href: "/", key: "navMonitors", icon: LayoutGrid, exact: true },
+  { href: "/incidents", key: "navIncidents", icon: Siren, exact: false, badge: true },
+  { href: "/settings", key: "navSettings", icon: Settings, exact: false },
 ];
 
 export function Nav({ ongoingCount = 0 }: { ongoingCount?: number }) {
   const pathname = usePathname();
+  const t = useT();
   return (
     <nav className="flex items-center gap-1 text-sm">
-      {LINKS.map(({ href, label, icon: Icon, exact, badge }) => {
+      {LINKS.map(({ href, key, icon: Icon, exact, badge }) => {
         const active = exact ? pathname === href : pathname.startsWith(href);
         return (
           <Link
@@ -26,7 +35,7 @@ export function Nav({ ongoingCount = 0 }: { ongoingCount?: number }) {
             }`}
           >
             <Icon className="w-4 h-4" />
-            <span className="hidden sm:inline">{label}</span>
+            <span className="hidden sm:inline">{t(key)}</span>
             {badge && ongoingCount > 0 && (
               <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold leading-none tabular-nums">
                 {ongoingCount > 99 ? "99+" : ongoingCount}

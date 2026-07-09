@@ -1,9 +1,16 @@
 "use client";
 import { useEffect, useState } from "react";
-import { LANGS, MESSAGES, t, type Lang } from "@/lib/i18n";
+import { useRouter } from "next/navigation";
+import { LANGS, t, type Lang } from "@/lib/i18n";
 
 type Theme = "light" | "dark" | "auto";
 type Hb = "normal" | "compact" | "none";
+
+interface Prefs {
+  lang: Lang;
+  theme: Theme;
+  hb: Hb;
+}
 
 const cls = "field-input !mt-1";
 
@@ -40,63 +47,70 @@ function Segmented<T extends string>({
 }
 
 export function AppearanceClient({ initialLang }: { initialLang: Lang }) {
-  const [lang, setLang] = useState<Lang>(initialLang);
-  const [theme, setTheme] = useState<Theme>("auto");
-  const [hb, setHb] = useState<Hb>("normal");
-  const [savedFlash, setSavedFlash] = useState(false);
+  const router = useRouter();
+  const [saved, setSaved] = useState<Prefs>({
+    lang: initialLang,
+    theme: "auto",
+    hb: "normal",
+  });
+  const [draft, setDraft] = useState<Prefs>(saved);
+  const [flash, setFlash] = useState(false);
 
-  // hydrate from localStorage on mount
+  // hydrate committed prefs from storage on mount
   useEffect(() => {
-    const l = (localStorage.getItem("apm.lang") as Lang) || "en";
-    const th = (localStorage.getItem("apm.theme") as Theme) || "auto";
-    const h = (localStorage.getItem("apm.heartbeat") as Hb) || "normal";
-    if (MESSAGES[l]) setLang(l);
-    setTheme(th);
-    setHb(h);
-  }, []);
+    const p: Prefs = {
+      lang: ((localStorage.getItem("apm.lang") as Lang) || initialLang) as Lang,
+      theme: (localStorage.getItem("apm.theme") as Theme) || "auto",
+      hb: (localStorage.getItem("apm.heartbeat") as Hb) || "normal",
+    };
+    setSaved(p);
+    setDraft(p);
+  }, [initialLang]);
 
-  function applyTheme(v: Theme) {
-    setTheme(v);
-    localStorage.setItem("apm.theme", v);
-    if (v === "auto") document.documentElement.removeAttribute("data-theme");
-    else document.documentElement.setAttribute("data-theme", v);
-    flash();
-  }
-  function applyHb(v: Hb) {
-    setHb(v);
-    localStorage.setItem("apm.heartbeat", v);
-    document.documentElement.setAttribute("data-hb", v);
-    flash();
-  }
-  function applyLang(v: Lang) {
-    setLang(v);
-    localStorage.setItem("apm.lang", v);
-    document.documentElement.lang = v;
-    document.cookie = `apm_lang=${v};path=/;max-age=31536000`;
-    flash();
-  }
-  function flash() {
-    setSavedFlash(true);
-    setTimeout(() => setSavedFlash(false), 1200);
+  const dirty =
+    draft.lang !== saved.lang ||
+    draft.theme !== saved.theme ||
+    draft.hb !== saved.hb;
+
+  // labels follow the COMMITTED language (change only after Save)
+  const tr = (k: Parameters<typeof t>[1]) => t(saved.lang, k);
+
+  function applyDom(p: Prefs) {
+    if (p.theme === "auto") document.documentElement.removeAttribute("data-theme");
+    else document.documentElement.setAttribute("data-theme", p.theme);
+    document.documentElement.setAttribute("data-hb", p.hb);
+    document.documentElement.lang = p.lang;
   }
 
-  const tr = (k: keyof (typeof MESSAGES)["en"]) => t(lang, k);
+  function onSave() {
+    localStorage.setItem("apm.theme", draft.theme);
+    localStorage.setItem("apm.heartbeat", draft.hb);
+    localStorage.setItem("apm.lang", draft.lang);
+    document.cookie = `apm_lang=${draft.lang};path=/;max-age=31536000`;
+    applyDom(draft);
+    setSaved(draft);
+    setFlash(true);
+    setTimeout(() => setFlash(false), 1500);
+    router.refresh();
+  }
+
+  function onCancel() {
+    setDraft(saved);
+  }
 
   return (
     <div className="card overflow-hidden">
       <div className="bg-black/5 dark:bg-white/5 px-5 py-3 flex items-center justify-between">
         <h2 className="font-semibold">{tr("appearance")}</h2>
-        {savedFlash && (
-          <span className="text-xs text-emerald-600">{tr("saved")}</span>
-        )}
+        {flash && <span className="text-xs text-emerald-600">{tr("saved")}</span>}
       </div>
       <div className="p-5 space-y-6">
         <div>
           <label className="block text-sm font-medium mb-1">{tr("language")}</label>
           <select
             className={cls}
-            value={lang}
-            onChange={(e) => applyLang(e.target.value as Lang)}
+            value={draft.lang}
+            onChange={(e) => setDraft({ ...draft, lang: e.target.value as Lang })}
           >
             {LANGS.map((l) => (
               <option key={l.code} value={l.code}>
@@ -110,8 +124,8 @@ export function AppearanceClient({ initialLang }: { initialLang: Lang }) {
         <div>
           <label className="block text-sm font-medium mb-2">{tr("theme")}</label>
           <Segmented<Theme>
-            value={theme}
-            onChange={applyTheme}
+            value={draft.theme}
+            onChange={(v) => setDraft({ ...draft, theme: v })}
             options={[
               { value: "light", label: tr("light") },
               { value: "dark", label: tr("dark") },
@@ -126,8 +140,8 @@ export function AppearanceClient({ initialLang }: { initialLang: Lang }) {
             {tr("heartbeatBar")}
           </label>
           <Segmented<Hb>
-            value={hb}
-            onChange={applyHb}
+            value={draft.hb}
+            onChange={(v) => setDraft({ ...draft, hb: v })}
             options={[
               { value: "normal", label: tr("hbNormal") },
               { value: "compact", label: tr("hbCompact") },
@@ -136,6 +150,30 @@ export function AppearanceClient({ initialLang }: { initialLang: Lang }) {
           />
           <p className="text-xs text-[var(--muted)] mt-2">{tr("heartbeatHint")}</p>
         </div>
+      </div>
+
+      <div className="border-t border-[var(--border)] px-5 py-3 flex items-center justify-end gap-2">
+        {dirty && (
+          <span className="text-xs text-[var(--muted)] mr-auto">
+            Unsaved changes
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={!dirty}
+          className="btn btn-ghost"
+        >
+          {tr("cancel")}
+        </button>
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={!dirty}
+          className="btn btn-primary"
+        >
+          {tr("save")}
+        </button>
       </div>
     </div>
   );

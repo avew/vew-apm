@@ -2,10 +2,12 @@
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { LogOut } from "lucide-react";
+import { useT } from "@/lib/i18n-client";
 
 export function LogoutButton() {
   const router = useRouter();
   const [pending, start] = useTransition();
+  const t = useT();
   return (
     <button
       disabled={pending}
@@ -20,7 +22,7 @@ export function LogoutButton() {
       title="Sign out"
     >
       <LogOut className="w-4 h-4" />
-      <span className="hidden sm:inline">Sign out</span>
+      <span className="hidden sm:inline">{t("signOut")}</span>
     </button>
   );
 }

@@ -35,6 +35,7 @@ export const monitors = sqliteTable(
     latencyWindow: integer("latency_window"),
     eurekaDropAlert: integer("eureka_drop_alert", { mode: "boolean" }),
     serviceGraceSeconds: integer("service_grace_seconds"),
+    componentGraceSeconds: integer("component_grace_seconds"),
     createdAt: ts("created_at"),
     updatedAt: ts("updated_at"),
   },
@@ -184,6 +185,7 @@ export const alertSettings = sqliteTable("alert_settings", {
     .notNull()
     .default(true),
   serviceGraceSeconds: integer("service_grace_seconds").notNull().default(30),
+  componentGraceSeconds: integer("component_grace_seconds").notNull().default(60),
   updatedAt: ts("updated_at"),
 });
 

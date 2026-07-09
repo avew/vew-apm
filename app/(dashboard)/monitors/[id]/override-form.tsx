@@ -10,6 +10,7 @@ interface Overrides {
   latencyWindow: number | null;
   eurekaDropAlert: boolean | null;
   serviceGraceSeconds: number | null;
+  componentGraceSeconds: number | null;
 }
 
 interface Globals {
@@ -20,6 +21,7 @@ interface Globals {
   latencyWindow: number;
   eurekaDropAlert: boolean;
   serviceGraceSeconds: number;
+  componentGraceSeconds: number;
 }
 
 const cls = "field-input";
@@ -28,10 +30,12 @@ export function OverrideForm({
   monitorId,
   current,
   globals,
+  onSaved,
 }: {
   monitorId: number;
   current: Overrides;
   globals: Globals;
+  onSaved?: () => void;
 }) {
   const toStr = (v: number | null) => (v == null ? "" : String(v));
   const [diskWarnPct, setDiskWarn] = useState(toStr(current.diskWarnPct));
@@ -40,6 +44,7 @@ export function OverrideForm({
   const [latencyWarnMs, setLat] = useState(toStr(current.latencyWarnMs));
   const [latencyWindow, setWin] = useState(toStr(current.latencyWindow));
   const [serviceGrace, setGrace] = useState(toStr(current.serviceGraceSeconds));
+  const [componentGrace, setCompGrace] = useState(toStr(current.componentGraceSeconds));
   const [eureka, setEureka] = useState<string>(
     current.eurekaDropAlert == null ? "" : current.eurekaDropAlert ? "on" : "off",
   );
@@ -72,6 +77,7 @@ export function OverrideForm({
               latencyWarnMs: numOrNull(latencyWarnMs),
               latencyWindow: numOrNull(latencyWindow),
               serviceGraceSeconds: numOrNull(serviceGrace),
+              componentGraceSeconds: numOrNull(componentGrace),
               eurekaDropAlert:
                 eureka === "" ? null : eureka === "on" ? true : false,
             }),
@@ -83,6 +89,7 @@ export function OverrideForm({
           }
           setMsg({ type: "ok", text: "Overrides saved." });
           router.refresh();
+          onSaved?.();
         });
       }}
     >
@@ -126,6 +133,12 @@ export function OverrideForm({
           <input className={cls} type="number" min={0} value={serviceGrace}
             placeholder={`inherit · ${globals.serviceGraceSeconds}`}
             onChange={(e) => setGrace(e.target.value)} />
+        </label>
+        <label className="block text-sm">
+          <span>Component grace (sec)</span>
+          <input className={cls} type="number" min={0} value={componentGrace}
+            placeholder={`inherit · ${globals.componentGraceSeconds}`}
+            onChange={(e) => setCompGrace(e.target.value)} />
         </label>
         <label className="block text-sm">
           <span>Service down alert</span>

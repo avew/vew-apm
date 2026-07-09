@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db/client";
+import { getLang } from "@/lib/i18n-server";
+import { LangProvider } from "@/lib/i18n-client";
 import { LogoutButton } from "./logout-button";
 import { Nav } from "./nav";
 import { Activity } from "lucide-react";
@@ -26,7 +28,9 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const ongoing = await ongoingIncidentCount();
+  const lang = await getLang();
   return (
+    <LangProvider lang={lang}>
     <div className="min-h-screen flex flex-col">
       <header className="sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--surface)]/80 backdrop-blur-md">
         <div className="max-w-7xl mx-auto flex items-center justify-between px-4 h-14 gap-4">
@@ -69,5 +73,6 @@ export default async function DashboardLayout({
         </div>
       </footer>
     </div>
+    </LangProvider>
   );
 }

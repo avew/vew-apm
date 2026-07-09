@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import type { NotificationChannel } from "@/lib/db/schema";
 import { Send, Trash2, Plus, Bell } from "lucide-react";
 import { NotificationModal } from "./notification-modal";
+import { useT } from "@/lib/i18n-client";
 
 export function ChannelsClient({
   initial,
@@ -11,6 +12,7 @@ export function ChannelsClient({
   initial: NotificationChannel[];
 }) {
   const [open, setOpen] = useState(false);
+  const t = useT();
 
   return (
     <div className="space-y-4">
@@ -23,7 +25,7 @@ export function ChannelsClient({
           onClick={() => setOpen(true)}
           className="btn btn-primary shrink-0"
         >
-          <Plus className="w-4 h-4" /> Set Up Notification
+          <Plus className="w-4 h-4" /> {t("setUpNotification")}
         </button>
       </div>
 

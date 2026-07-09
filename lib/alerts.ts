@@ -10,6 +10,7 @@ export interface EffectiveThresholds {
   latencyWindow: number;
   eurekaDropAlert: boolean;
   serviceGraceSeconds: number;
+  componentGraceSeconds: number;
 }
 
 export const ALERT_DEFAULTS: EffectiveThresholds = {
@@ -20,6 +21,7 @@ export const ALERT_DEFAULTS: EffectiveThresholds = {
   latencyWindow: 5,
   eurekaDropAlert: true,
   serviceGraceSeconds: 30,
+  componentGraceSeconds: 60,
 };
 
 export async function loadAlertSettings(): Promise<AlertSettings> {
@@ -61,6 +63,8 @@ export function mergeThresholds(
     eurekaDropAlert: monitor.eurekaDropAlert ?? global.eurekaDropAlert,
     serviceGraceSeconds:
       monitor.serviceGraceSeconds ?? global.serviceGraceSeconds,
+    componentGraceSeconds:
+      monitor.componentGraceSeconds ?? global.componentGraceSeconds,
   };
 }
 
@@ -76,6 +80,7 @@ export async function getEffectiveThresholds(
     latencyWindow: row.latencyWindow,
     eurekaDropAlert: row.eurekaDropAlert,
     serviceGraceSeconds: row.serviceGraceSeconds,
+    componentGraceSeconds: row.componentGraceSeconds,
   };
   return mergeThresholds(global, monitor);
 }

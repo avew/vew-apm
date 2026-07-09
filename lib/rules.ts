@@ -28,8 +28,8 @@ export interface RuleContext {
     overallStatus: string;
     responseMs: number | null;
   }[];
-  /** Current-check component statuses. */
-  components: { path: string; status: string }[];
+  /** Components that have been non-UP for >= componentGrace (computed upstream). */
+  badComponents: { path: string; status: string }[];
   /** Current-check disk snapshots. */
   disks: { path: string; usedPct: number }[];
   /** Current-check eureka services. */
@@ -113,18 +113,17 @@ export function evaluateRules(ctx: RuleContext): DesiredAlert[] {
     }
   }
 
-  // 4. Component DOWN (Spring's own health flip).
-  for (const c of ctx.components) {
-    if (c.status === "DOWN") {
-      out.push({
-        kind: "component_down",
-        componentPath: c.path,
-        severity: "critical",
-        metricValue: null,
-        threshold: null,
-        reason: `${c.path} is DOWN`,
-      });
-    }
+  // 4. Component non-UP (Spring's own health flip), grace-filtered upstream.
+  //    DOWN → critical; OUT_OF_SERVICE (or other non-UP) → warning.
+  for (const c of ctx.badComponents) {
+    out.push({
+      kind: "component_down",
+      componentPath: c.path,
+      severity: c.status === "DOWN" ? "critical" : "warning",
+      metricValue: null,
+      threshold: null,
+      reason: `${c.path} is ${c.status}`,
+    });
   }
 
   // 5. Eureka instance drop to zero.

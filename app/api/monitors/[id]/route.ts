@@ -21,6 +21,7 @@ const PatchBody = z.object({
   latencyWindow: z.number().int().min(1).max(100).nullable().optional(),
   eurekaDropAlert: z.boolean().nullable().optional(),
   serviceGraceSeconds: z.number().int().min(0).max(86400).nullable().optional(),
+  componentGraceSeconds: z.number().int().min(0).max(86400).nullable().optional(),
 });
 
 async function getId(ctx: { params: Promise<{ id: string }> }) {

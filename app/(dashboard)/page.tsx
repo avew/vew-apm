@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getDb, schema } from "@/lib/db/client";
 import { desc, eq, and, sql, gte } from "drizzle-orm";
 import { listActiveWindows } from "@/lib/maintenance";
+import { getT } from "@/lib/i18n-server";
 import { Plus, Wrench } from "lucide-react";
 import { AutoRefresh } from "./auto-refresh";
 
@@ -108,6 +109,7 @@ export default async function Home() {
     }),
   );
 
+  const t = await getT();
   const upCount = monitors.filter((m) => m.lastStatus === "UP").length;
   const downCount = monitors.filter((m) => m.lastStatus === "DOWN").length;
   const mutedCount = monitors.filter(
@@ -118,17 +120,17 @@ export default async function Home() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Monitors</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{t("titleMonitors")}</h1>
           <p className="text-sm text-[var(--muted)] mt-0.5">
             {monitors.length} monitor{monitors.length === 1 ? "" : "s"} ·{" "}
             <span className="text-emerald-600 dark:text-emerald-400 font-medium">
-              {upCount} up
+              {upCount} {t("up")}
             </span>
             {downCount > 0 && (
               <>
                 {" · "}
                 <span className="text-red-600 dark:text-red-400 font-medium">
-                  {downCount} down
+                  {downCount} {t("down")}
                 </span>
               </>
             )}
@@ -136,7 +138,7 @@ export default async function Home() {
               <>
                 {" · "}
                 <span className="text-amber-600 dark:text-amber-400 font-medium">
-                  {mutedCount} in maintenance
+                  {mutedCount} {t("inMaintenance")}
                 </span>
               </>
             )}
@@ -145,7 +147,7 @@ export default async function Home() {
         <div className="flex items-center gap-3">
           <AutoRefresh />
           <Link href="/monitors/new" className="btn btn-primary">
-            <Plus className="w-4 h-4" /> New monitor
+            <Plus className="w-4 h-4" /> {t("newMonitor")}
           </Link>
         </div>
       </div>

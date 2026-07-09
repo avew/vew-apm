@@ -1,7 +1,19 @@
 "use client";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Play, Pause, Pencil, Copy, Trash2, X } from "lucide-react";
+import {
+  Play,
+  Pause,
+  Pencil,
+  Copy,
+  Trash2,
+  X,
+  SlidersHorizontal,
+} from "lucide-react";
+import { OverrideForm } from "./override-form";
+import { useT } from "@/lib/i18n-client";
+
+type ThresholdProps = Omit<React.ComponentProps<typeof OverrideForm>, "onSaved">;
 
 export function MonitorActions({
   id,
@@ -9,18 +21,22 @@ export function MonitorActions({
   name,
   url,
   intervalSeconds,
+  thresholds,
 }: {
   id: number;
   enabled: boolean;
   name: string;
   url: string;
   intervalSeconds: number;
+  thresholds: ThresholdProps;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [editing, setEditing] = useState(false);
   const [cloning, setCloning] = useState(false);
+  const [thresholding, setThresholding] = useState(false);
 
+  const t = useT();
   const call = (input: RequestInfo, init: RequestInit, after?: (j: unknown) => void) =>
     start(async () => {
       const res = await fetch(input, init);
@@ -38,14 +54,14 @@ export function MonitorActions({
         }
         className="btn btn-ghost"
       >
-        <Play className="w-4 h-4" /> Run check
+        <Play className="w-4 h-4" /> {t("runCheck")}
       </button>
 
       <button
         disabled={pending}
         onClick={() => {
-          const verb = enabled ? "Pause" : "Resume";
-          if (!confirm(`${verb} monitoring for "${name}"?`)) return;
+          const verb = enabled ? t("pause") : t("resume");
+          if (!confirm(`${verb} — "${name}"?`)) return;
           call(`/api/monitors/${id}`, {
             method: "PATCH",
             headers: { "content-type": "application/json" },
@@ -56,11 +72,11 @@ export function MonitorActions({
       >
         {enabled ? (
           <>
-            <Pause className="w-4 h-4" /> Pause
+            <Pause className="w-4 h-4" /> {t("pause")}
           </>
         ) : (
           <>
-            <Play className="w-4 h-4" /> Resume
+            <Play className="w-4 h-4" /> {t("resume")}
           </>
         )}
       </button>
@@ -70,7 +86,15 @@ export function MonitorActions({
         onClick={() => setEditing(true)}
         className="btn btn-ghost"
       >
-        <Pencil className="w-4 h-4" /> Edit
+        <Pencil className="w-4 h-4" /> {t("edit")}
+      </button>
+
+      <button
+        disabled={pending}
+        onClick={() => setThresholding(true)}
+        className="btn btn-ghost"
+      >
+        <SlidersHorizontal className="w-4 h-4" /> {t("thresholds")}
       </button>
 
       <button
@@ -78,7 +102,7 @@ export function MonitorActions({
         onClick={() => setCloning(true)}
         className="btn btn-ghost"
       >
-        <Copy className="w-4 h-4" /> Clone
+        <Copy className="w-4 h-4" /> {t("clone")}
       </button>
 
       <button
@@ -91,7 +115,7 @@ export function MonitorActions({
         }}
         className="btn btn-danger"
       >
-        <Trash2 className="w-4 h-4" /> Delete
+        <Trash2 className="w-4 h-4" /> {t("delete")}
       </button>
 
       {editing && (
@@ -111,6 +135,14 @@ export function MonitorActions({
           onClose={() => setCloning(false)}
         />
       )}
+      {thresholding && (
+        <ModalShell title="Alert thresholds" wide onClose={() => setThresholding(false)}>
+          <p className="text-xs text-[var(--muted)] mb-3">
+            Overrides for this monitor. Blank = inherit the global default.
+          </p>
+          <OverrideForm {...thresholds} onSaved={() => setThresholding(false)} />
+        </ModalShell>
+      )}
     </div>
   );
 }
@@ -119,10 +151,12 @@ function ModalShell({
   title,
   onClose,
   children,
+  wide,
 }: {
   title: string;
   onClose: () => void;
   children: React.ReactNode;
+  wide?: boolean;
 }) {
   return (
     <div
@@ -130,7 +164,7 @@ function ModalShell({
       onClick={onClose}
     >
       <div
-        className="card w-full max-w-sm my-16 p-6"
+        className={`card w-full ${wide ? "max-w-lg" : "max-w-sm"} my-16 p-6`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">

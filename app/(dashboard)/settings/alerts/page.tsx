@@ -24,6 +24,7 @@ export default async function AlertsSettingsPage() {
             latencyWindow: settings.latencyWindow,
             eurekaDropAlert: settings.eurekaDropAlert,
             serviceGraceSeconds: settings.serviceGraceSeconds,
+            componentGraceSeconds: settings.componentGraceSeconds,
           }}
         />
       </section>

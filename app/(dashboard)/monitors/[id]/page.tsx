@@ -5,13 +5,13 @@ import { desc, eq, and, sql, gte } from "drizzle-orm";
 import { isMonitorMuted } from "@/lib/maintenance";
 import { uptimePct } from "@/lib/uptime";
 import { loadAlertSettings } from "@/lib/alerts";
+import { getT } from "@/lib/i18n-server";
 import { ResponseTimeChart } from "./response-chart";
 import { DiskChart } from "./disk-chart";
 import { MonitorActions } from "./monitor-actions";
 import { ComponentTree } from "./component-tree";
 import { HealthProbes } from "./health-probes";
 import { ServiceRegistry } from "./service-registry";
-import { OverrideForm } from "./override-form";
 import { AutoRefresh } from "../../auto-refresh";
 import {
   ChevronLeft,
@@ -21,7 +21,6 @@ import {
   Server,
   FileText,
   AlertTriangle,
-  SlidersHorizontal,
   Network,
 } from "lucide-react";
 
@@ -190,6 +189,7 @@ export default async function MonitorDetail({
   ]);
   const registry = await loadServiceRegistry(monitorId);
   const propertySources = await loadPropertySources(rawJson);
+  const t = await getT();
 
   const status = monitor.lastStatus ?? "UNKNOWN";
   const statusBadge =
@@ -209,7 +209,7 @@ export default async function MonitorDetail({
           href="/"
           className="inline-flex items-center gap-1 text-sm text-[var(--muted)] hover:text-[var(--foreground)] mb-2"
         >
-          <ChevronLeft className="w-4 h-4" /> Monitors
+          <ChevronLeft className="w-4 h-4" /> {t("titleMonitors")}
         </Link>
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
@@ -237,6 +237,29 @@ export default async function MonitorDetail({
             name={monitor.name}
             url={monitor.url}
             intervalSeconds={monitor.intervalSeconds}
+            thresholds={{
+              monitorId: monitor.id,
+              current: {
+                diskWarnPct: monitor.diskWarnPct,
+                diskCritPct: monitor.diskCritPct,
+                downForMinutes: monitor.downForMinutes,
+                latencyWarnMs: monitor.latencyWarnMs,
+                latencyWindow: monitor.latencyWindow,
+                eurekaDropAlert: monitor.eurekaDropAlert,
+                serviceGraceSeconds: monitor.serviceGraceSeconds,
+                componentGraceSeconds: monitor.componentGraceSeconds,
+              },
+              globals: {
+                diskWarnPct: alertGlobals.diskWarnPct,
+                diskCritPct: alertGlobals.diskCritPct,
+                downForMinutes: alertGlobals.downForMinutes,
+                latencyWarnMs: alertGlobals.latencyWarnMs,
+                latencyWindow: alertGlobals.latencyWindow,
+                eurekaDropAlert: alertGlobals.eurekaDropAlert,
+                serviceGraceSeconds: alertGlobals.serviceGraceSeconds,
+                componentGraceSeconds: alertGlobals.componentGraceSeconds,
+              },
+            }}
           />
         </div>
       </div>
@@ -252,7 +275,7 @@ export default async function MonitorDetail({
       />
 
       <section className="card p-5">
-        <SectionHeader icon={Activity} title="Response time" hint="recent 300 checks" />
+        <SectionHeader icon={Activity} title={t("secResponseTime")} hint="recent 300 checks" />
         <ResponseTimeChart
           data={checks
             .slice()
@@ -266,7 +289,7 @@ export default async function MonitorDetail({
       </section>
 
       <section className="card p-5">
-        <SectionHeader icon={Boxes} title="Components" />
+        <SectionHeader icon={Boxes} title={t("secComponents")} />
         <ComponentTree
           components={components.map((c) => ({
             path: c.path,
@@ -278,7 +301,7 @@ export default async function MonitorDetail({
 
       {disk.length > 0 && (
         <section className="card p-5">
-          <SectionHeader icon={HardDrive} title="Disk usage" hint="24h" />
+          <SectionHeader icon={HardDrive} title={t("secDisk")} hint="24h" />
           <DiskChart
             data={disk.map((d) => ({
               t: new Date(d.checkedAt).getTime(),
@@ -294,7 +317,7 @@ export default async function MonitorDetail({
       <section className="card p-5">
         <SectionHeader
           icon={Network}
-          title="Service registry"
+          title={t("secServiceRegistry")}
           hint="tracked"
         />
         <p className="text-xs text-[var(--muted)] -mt-1 mb-3">
@@ -359,37 +382,9 @@ export default async function MonitorDetail({
         </section>
       )}
 
-      <section className="card p-5">
-        <SectionHeader
-          icon={SlidersHorizontal}
-          title="Alert thresholds"
-          hint="override"
-        />
-        <OverrideForm
-          monitorId={monitor.id}
-          current={{
-            diskWarnPct: monitor.diskWarnPct,
-            diskCritPct: monitor.diskCritPct,
-            downForMinutes: monitor.downForMinutes,
-            latencyWarnMs: monitor.latencyWarnMs,
-            latencyWindow: monitor.latencyWindow,
-            eurekaDropAlert: monitor.eurekaDropAlert,
-            serviceGraceSeconds: monitor.serviceGraceSeconds,
-          }}
-          globals={{
-            diskWarnPct: alertGlobals.diskWarnPct,
-            diskCritPct: alertGlobals.diskCritPct,
-            downForMinutes: alertGlobals.downForMinutes,
-            latencyWarnMs: alertGlobals.latencyWarnMs,
-            latencyWindow: alertGlobals.latencyWindow,
-            eurekaDropAlert: alertGlobals.eurekaDropAlert,
-            serviceGraceSeconds: alertGlobals.serviceGraceSeconds,
-          }}
-        />
-      </section>
 
       <section className="card p-5">
-        <SectionHeader icon={AlertTriangle} title="Incidents" />
+        <SectionHeader icon={AlertTriangle} title={t("secIncidents")} />
         {incidents.length === 0 && (
           <p className="text-sm text-[var(--muted)]">No incidents recorded.</p>
         )}

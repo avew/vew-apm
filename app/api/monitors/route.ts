@@ -21,6 +21,7 @@ const CreateBody = z.object({
   latencyWindow: z.number().int().min(1).max(100).nullish(),
   eurekaDropAlert: z.boolean().nullish(),
   serviceGraceSeconds: z.number().int().min(0).max(86400).nullish(),
+  componentGraceSeconds: z.number().int().min(0).max(86400).nullish(),
 });
 
 export async function GET() {
@@ -62,6 +63,7 @@ export async function POST(req: Request) {
       latencyWindow: m.latencyWindow ?? null,
       eurekaDropAlert: m.eurekaDropAlert ?? null,
       serviceGraceSeconds: m.serviceGraceSeconds ?? null,
+      componentGraceSeconds: m.componentGraceSeconds ?? null,
     })
     .returning();
   return NextResponse.json({ monitor: row }, { status: 201 });

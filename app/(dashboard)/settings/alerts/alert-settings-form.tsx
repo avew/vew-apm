@@ -10,6 +10,7 @@ interface Values {
   latencyWindow: number;
   eurekaDropAlert: boolean;
   serviceGraceSeconds: number;
+  componentGraceSeconds: number;
 }
 
 const cls = "field-input";
@@ -70,6 +71,18 @@ export function AlertSettingsForm({ initial }: { initial: Values }) {
           <span>Open incident after DOWN for ≥ (minutes)</span>
           <input className={cls} type="number" min={0} max={1440} value={v.downForMinutes} onChange={num("downForMinutes")} />
           <span className="text-xs text-[var(--muted)]">0 = alert on first failed check (no debounce).</span>
+        </label>
+      </fieldset>
+
+      <fieldset className="space-y-3">
+        <legend className="text-sm font-medium mb-1">Components</legend>
+        <label className="block text-sm">
+          <span>Grace before a DOWN / OUT_OF_SERVICE component alerts (seconds)</span>
+          <input className={cls} type="number" min={0} max={86400} value={v.componentGraceSeconds} onChange={num("componentGraceSeconds")} />
+          <span className="text-xs text-[var(--muted)]">
+            Debounces flapping components. DOWN → critical, OUT_OF_SERVICE →
+            warning. 0 = alert on the first bad check.
+          </span>
         </label>
       </fieldset>
 

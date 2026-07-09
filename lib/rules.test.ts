@@ -9,7 +9,7 @@ function ctx(partial: Partial<RuleContext>): RuleContext {
     now: NOW,
     thresholds: { ...ALERT_DEFAULTS },
     recentChecks: [],
-    components: [],
+    badComponents: [],
     disks: [],
     eurekaServices: [],
     eurekaMissing: [],
@@ -129,20 +129,26 @@ describe("evaluateRules — service disappeared", () => {
 });
 
 describe("evaluateRules — component down + keys", () => {
-  it("flags DOWN components and produces unique keys", () => {
+  it("flags DOWN components (critical) and produces unique keys", () => {
     const alerts = evaluateRules(
       ctx({
-        components: [
-          { path: "redis", status: "DOWN" },
-          { path: "ping", status: "UP" },
-        ],
+        badComponents: [{ path: "redis", status: "DOWN" }],
         disks: [{ path: "diskSpace", usedPct: 90 }],
       }),
     );
-    expect(alerts.find((a) => a.kind === "component_down")?.componentPath).toBe(
-      "redis",
-    );
+    const comp = alerts.find((a) => a.kind === "component_down");
+    expect(comp?.componentPath).toBe("redis");
+    expect(comp?.severity).toBe("critical");
     const keys = alerts.map(alertKey);
     expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it("flags OUT_OF_SERVICE components as warning", () => {
+    const alerts = evaluateRules(
+      ctx({ badComponents: [{ path: "redis", status: "OUT_OF_SERVICE" }] }),
+    );
+    const comp = alerts.find((a) => a.kind === "component_down");
+    expect(comp?.severity).toBe("warning");
+    expect(comp?.reason).toContain("OUT_OF_SERVICE");
   });
 });

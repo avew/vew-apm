@@ -2,20 +2,28 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { User, SlidersHorizontal, Bell, Wrench, Palette } from "lucide-react";
+import { useT } from "@/lib/i18n-client";
+import type { MsgKey } from "@/lib/i18n";
 
-const TABS = [
-  { href: "/settings", label: "General", icon: User, exact: true },
-  { href: "/settings/appearance", label: "Appearance", icon: Palette },
-  { href: "/settings/alerts", label: "Alerts", icon: SlidersHorizontal },
-  { href: "/settings/notifications", label: "Notifications", icon: Bell },
-  { href: "/settings/maintenance", label: "Maintenance", icon: Wrench },
+const TABS: {
+  href: string;
+  key: MsgKey;
+  icon: typeof User;
+  exact?: boolean;
+}[] = [
+  { href: "/settings", key: "navGeneral", icon: User, exact: true },
+  { href: "/settings/appearance", key: "appearance", icon: Palette },
+  { href: "/settings/alerts", key: "navAlerts", icon: SlidersHorizontal },
+  { href: "/settings/notifications", key: "navNotifications", icon: Bell },
+  { href: "/settings/maintenance", key: "navMaintenance", icon: Wrench },
 ];
 
 export function SettingsNav() {
   const pathname = usePathname();
+  const t = useT();
   return (
     <nav className="flex flex-wrap items-center gap-1 border-b border-[var(--border)] pb-3">
-      {TABS.map(({ href, label, icon: Icon, exact }) => {
+      {TABS.map(({ href, key, icon: Icon, exact }) => {
         const active = exact ? pathname === href : pathname.startsWith(href);
         return (
           <Link
@@ -28,7 +36,7 @@ export function SettingsNav() {
             }`}
           >
             <Icon className="w-4 h-4" />
-            {label}
+            {t(key)}
           </Link>
         );
       })}

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getDb, schema } from "@/lib/db/client";
 import { eq, desc, and } from "drizzle-orm";
 import { AutoRefresh } from "../auto-refresh";
+import { getT } from "@/lib/i18n-server";
 import { Siren } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -83,12 +84,16 @@ export default async function IncidentsPage({
   const { filter: raw } = await searchParams;
   const filter: Filter =
     raw === "resolved" || raw === "all" ? raw : "open";
-  const [incidents, c] = await Promise.all([loadIncidents(filter), counts()]);
+  const [incidents, c, t] = await Promise.all([
+    loadIncidents(filter),
+    counts(),
+    getT(),
+  ]);
 
   const TABS: { key: Filter; label: string }[] = [
-    { key: "open", label: "Ongoing" },
-    { key: "resolved", label: "Resolved" },
-    { key: "all", label: "All" },
+    { key: "open", label: t("ongoing") },
+    { key: "resolved", label: t("resolved") },
+    { key: "all", label: t("all") },
   ];
 
   return (
@@ -96,21 +101,21 @@ export default async function IncidentsPage({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
-            <Siren className="w-6 h-6" /> Incidents
+            <Siren className="w-6 h-6" /> {t("titleIncidents")}
           </h1>
           <p className="text-sm text-[var(--muted)] mt-0.5">
             {c.open === 0 ? (
-              "No ongoing incidents — all clear."
+              t("allClear")
             ) : (
               <>
                 <span className="text-red-600 dark:text-red-400 font-medium">
-                  {c.critical} critical
+                  {c.critical} {t("critical")}
                 </span>
                 {" · "}
                 <span className="text-amber-600 dark:text-amber-400 font-medium">
-                  {c.warning} warning
+                  {c.warning} {t("warning")}
                 </span>
-                {" ongoing"}
+                {" " + t("ongoing").toLowerCase()}
               </>
             )}
           </p>

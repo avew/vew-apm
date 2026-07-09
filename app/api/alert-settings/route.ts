@@ -11,6 +11,7 @@ const Body = z.object({
   latencyWindow: z.number().int().min(1).max(100).optional(),
   eurekaDropAlert: z.boolean().optional(),
   serviceGraceSeconds: z.number().int().min(0).max(86400).optional(),
+  componentGraceSeconds: z.number().int().min(0).max(86400).optional(),
 });
 
 export async function GET() {

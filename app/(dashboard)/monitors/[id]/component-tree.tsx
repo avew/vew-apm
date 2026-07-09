@@ -68,7 +68,7 @@ function statusPill(status: string) {
 }
 
 function TreeNode({ node, depth }: { node: Node; depth: number }) {
-  const [open, setOpen] = useState(depth < 1);
+  const [open, setOpen] = useState(false);
   const hasChildren = node.children.size > 0;
   const hasDetails =
     node.details && Object.keys(node.details).length > 0;

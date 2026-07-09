@@ -1,5 +1,5 @@
 import { getDb, schema } from "@/lib/db/client";
-import { and, eq, lte, desc } from "drizzle-orm";
+import { and, eq, lte, desc, inArray } from "drizzle-orm";
 import { parseHealth, type ParsedHealth } from "./parser";
 import { isMonitorMuted } from "./maintenance";
 import { dispatch } from "./notifier";
@@ -144,6 +144,64 @@ async function loadRecentChecks(monitorId: number, limit: number) {
     .orderBy(desc(schema.checks.id))
     .limit(limit);
   return rows;
+}
+
+/**
+ * Components that are currently non-UP AND have stayed non-UP continuously for
+ * at least `graceSeconds` (debounce, avoids flapping). Uses recent
+ * component_statuses history. Returns current status per sustained-bad path.
+ */
+async function computeBadComponents(
+  monitorId: number,
+  parsed: ParsedHealth | null,
+  graceSeconds: number,
+  now: Date,
+): Promise<{ path: string; status: string }[]> {
+  const isBad = (s: string) => s === "DOWN" || s === "OUT_OF_SERVICE";
+  const currentBad = (parsed?.components ?? []).filter((c) => isBad(c.status));
+  if (currentBad.length === 0) return [];
+
+  const db = getDb();
+  const recent = await db
+    .select({ id: schema.checks.id, checkedAt: schema.checks.checkedAt })
+    .from(schema.checks)
+    .where(eq(schema.checks.monitorId, monitorId))
+    .orderBy(desc(schema.checks.id))
+    .limit(40);
+  const ids = recent.map((r) => r.id);
+  const rows = ids.length
+    ? await db
+        .select({
+          checkId: schema.componentStatuses.checkId,
+          path: schema.componentStatuses.path,
+          status: schema.componentStatuses.status,
+        })
+        .from(schema.componentStatuses)
+        .where(inArray(schema.componentStatuses.checkId, ids))
+    : [];
+  // checkId -> (path -> status)
+  const byCheck = new Map<number, Map<string, string>>();
+  for (const r of rows) {
+    let m = byCheck.get(r.checkId);
+    if (!m) byCheck.set(r.checkId, (m = new Map()));
+    m.set(r.path, r.status);
+  }
+
+  const graceMs = graceSeconds * 1000;
+  const out: { path: string; status: string }[] = [];
+  for (const c of currentBad) {
+    // walk checks newest→oldest while this path stays bad
+    let oldestBadAt = now;
+    for (const chk of recent) {
+      const st = byCheck.get(chk.id)?.get(c.path);
+      if (st && isBad(st)) oldestBadAt = chk.checkedAt;
+      else break;
+    }
+    if (now.getTime() - oldestBadAt.getTime() >= graceMs) {
+      out.push({ path: c.path, status: c.status });
+    }
+  }
+  return out;
 }
 
 const SOURCE_PRIORITY: Record<string, number> = {
@@ -306,14 +364,19 @@ async function reconcileIncidents(
   );
   const eurekaMissing = thresholds.eurekaDropAlert ? downServices : [];
 
+  // Components non-UP past the grace window (debounced).
+  const badComponents = await computeBadComponents(
+    monitor.id,
+    result.parsed,
+    thresholds.componentGraceSeconds,
+    now,
+  );
+
   const desiredList: DesiredAlert[] = evaluateRules({
     now,
     thresholds,
     recentChecks,
-    components: result.parsed?.components.map((c) => ({
-      path: c.path,
-      status: c.status,
-    })) ?? [],
+    badComponents,
     disks: result.parsed?.disks.map((d) => ({
       path: d.path,
       usedPct: d.usedPct,
