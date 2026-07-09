@@ -1,14 +1,74 @@
 "use client";
-import { useState, useTransition } from "react";
+import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import type { MaintenanceWindow } from "@/lib/db/schema";
 import { Trash2 } from "lucide-react";
 
 const cls = "field-input";
 
+const DURATIONS = [
+  { label: "15 min", min: 15 },
+  { label: "30 min", min: 30 },
+  { label: "1 hour", min: 60 },
+  { label: "2 hours", min: 120 },
+  { label: "4 hours", min: 240 },
+  { label: "8 hours", min: 480 },
+  { label: "12 hours", min: 720 },
+  { label: "24 hours", min: 1440 },
+];
+
 function toLocalInputValue(d: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// Offset (ms) of a tz at a given instant: (wall-clock-in-tz) − UTC.
+function tzOffsetMs(date: Date, tz: string): number {
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  const p = Object.fromEntries(
+    dtf.formatToParts(date).map((x) => [x.type, x.value]),
+  );
+  const asUTC = Date.UTC(
+    +p.year,
+    +p.month - 1,
+    +p.day,
+    +p.hour % 24,
+    +p.minute,
+    +p.second,
+  );
+  return asUTC - date.getTime();
+}
+
+// Interpret a "YYYY-MM-DDTHH:mm" wall clock in the chosen tz → UTC Date.
+function wallClockToUtc(local: string, tz: string): Date {
+  if (!tz) return new Date(local); // same as server (browser local)
+  if (tz === "UTC") return new Date(local + ":00Z");
+  const [datePart, timePart] = local.split("T");
+  const [y, mo, d] = datePart.split("-").map(Number);
+  const [h, mi] = timePart.split(":").map(Number);
+  const asUTC = Date.UTC(y, mo - 1, d, h, mi);
+  return new Date(asUTC - tzOffsetMs(new Date(asUTC), tz));
+}
+
+function addMinutesToLocal(local: string, min: number): string {
+  const d = new Date(local);
+  d.setMinutes(d.getMinutes() + min);
+  return toLocalInputValue(d);
+}
+
+function diffMinutes(startLocal: string, endLocal: string): number {
+  return Math.round(
+    (new Date(endLocal).getTime() - new Date(startLocal).getTime()) / 60000,
+  );
 }
 
 export function MaintenanceClient({
@@ -28,11 +88,37 @@ export function MaintenanceClient({
   );
   const [startsAt, setStartsAt] = useState(toLocalInputValue(now));
   const [endsAt, setEndsAt] = useState(toLocalInputValue(in1h));
+  const [timezone, setTimezone] = useState(""); // "" = same as server
   const [recurrence, setRecurrence] =
     useState<"none" | "daily" | "weekly" | "monthly">("none");
   const [reason, setReason] = useState("");
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  const timezones = useMemo(() => {
+    let zones: string[] = [];
+    try {
+      const sv = (
+        Intl as unknown as { supportedValuesOf?: (k: string) => string[] }
+      ).supportedValuesOf;
+      zones = sv ? sv("timeZone") : [];
+    } catch {
+      zones = [];
+    }
+    const ref = new Date();
+    return zones
+      .map((tz) => {
+        const off = tzOffsetMs(ref, tz);
+        const sign = off >= 0 ? "+" : "-";
+        const abs = Math.abs(off);
+        const hh = String(Math.floor(abs / 3600000)).padStart(2, "0");
+        const mm = String(Math.floor((abs % 3600000) / 60000)).padStart(2, "0");
+        return { tz, off, label: `(UTC${sign}${hh}:${mm}) ${tz}` };
+      })
+      .sort((a, b) => a.off - b.off || a.tz.localeCompare(b.tz));
+  }, []);
+
+  const activeDur = diffMinutes(startsAt, endsAt);
 
   return (
     <div className="grid gap-6 md:grid-cols-2">
@@ -51,8 +137,8 @@ export function MaintenanceClient({
                   name,
                   scope,
                   monitorId: scope === "monitor" && monitorId !== "" ? monitorId : null,
-                  startsAt: new Date(startsAt).toISOString(),
-                  endsAt: new Date(endsAt).toISOString(),
+                  startsAt: wallClockToUtc(startsAt, timezone).toISOString(),
+                  endsAt: wallClockToUtc(endsAt, timezone).toISOString(),
                   recurrence,
                   reason: reason || undefined,
                 }),
@@ -95,15 +181,57 @@ export function MaintenanceClient({
               </select>
             </label>
           )}
+          <label className="block text-sm">
+            <span>Timezone</span>
+            <select
+              className={cls}
+              value={timezone}
+              onChange={(e) => setTimezone(e.target.value)}
+            >
+              <option value="">Same as Server Timezone</option>
+              <option value="UTC">UTC</option>
+              {timezones.map((z) => (
+                <option key={z.tz} value={z.tz}>
+                  {z.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
           <div className="grid grid-cols-2 gap-3">
             <label className="block text-sm">
-              <span>Starts at</span>
+              <span>Start Date/Time</span>
               <input className={cls} type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} required />
             </label>
             <label className="block text-sm">
-              <span>Ends at</span>
+              <span>End Date/Time</span>
               <input className={cls} type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} required />
             </label>
+          </div>
+
+          <div>
+            <div className="flex flex-wrap gap-1.5">
+              {DURATIONS.map((d) => {
+                const active = activeDur === d.min;
+                return (
+                  <button
+                    key={d.min}
+                    type="button"
+                    onClick={() => setEndsAt(addMinutesToLocal(startsAt, d.min))}
+                    className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                      active
+                        ? "border-[var(--color-brand-600)] text-[var(--color-brand-700)] bg-[var(--color-brand-50)] dark:bg-[rgb(79_107_237/0.15)] dark:text-[#8ea2ff]"
+                        : "border-[var(--border)] text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-black/5 dark:hover:bg-white/5"
+                    }`}
+                  >
+                    {d.label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-[var(--muted)] mt-1">
+              Sets end time based on start time.
+            </p>
           </div>
           <label className="block text-sm">
             <span>Recurrence</span>

@@ -151,9 +151,52 @@ export default async function Home() {
       </div>
 
       {globalMute && (
-        <div className="flex items-center gap-2 rounded-xl border border-amber-300/60 bg-amber-50 text-amber-900 px-4 py-2.5 text-sm dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-800/50">
-          <Wrench className="w-4 h-4 shrink-0" />
-          Global maintenance window is active — alerts are suppressed.
+        <div className="rounded-xl border border-amber-300/60 bg-amber-50 text-amber-900 px-4 py-3 text-sm dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-800/50">
+          <div className="flex items-center gap-2 font-medium">
+            <Wrench className="w-4 h-4 shrink-0" />
+            Global maintenance is active — alerting paused for all monitors.
+          </div>
+          <ul className="mt-2 space-y-1.5 pl-6">
+            {activeWindows
+              .filter((w) => w.scope === "global")
+              .map((w) => {
+                const oneOff = w.recurrence === "none";
+                const timeFmt: Intl.DateTimeFormatOptions = {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                };
+                const startsAt = new Date(w.startsAt);
+                const endsAt = new Date(w.endsAt);
+                const remainingMin = Math.max(
+                  0,
+                  Math.round((endsAt.getTime() - Date.now()) / 60000),
+                );
+                const remaining =
+                  remainingMin >= 60
+                    ? `${Math.floor(remainingMin / 60)}h ${remainingMin % 60}m`
+                    : `${remainingMin}m`;
+                return (
+                  <li key={w.id} className="text-amber-900/90 dark:text-amber-200/90">
+                    <span className="font-medium">{w.name}</span>
+                    {w.reason ? ` — ${w.reason}` : ""}
+                    <span className="block text-xs text-amber-800/70 dark:text-amber-300/60">
+                      {oneOff
+                        ? `${startsAt.toLocaleString()} → ${endsAt.toLocaleString()} · ${remaining} remaining`
+                        : `Recurring ${w.recurrence} · ${startsAt.toLocaleTimeString(
+                            [],
+                            timeFmt,
+                          )}–${endsAt.toLocaleTimeString([], timeFmt)}`}
+                    </span>
+                  </li>
+                );
+              })}
+          </ul>
+          <p className="mt-2 pl-6 text-xs text-amber-800/70 dark:text-amber-300/60">
+            During maintenance, incidents are still recorded but flagged
+            <span className="font-medium"> suppressed</span> — no
+            webhook/email/Telegram notifications are sent, and uptime % is not
+            affected.
+          </p>
         </div>
       )}
 
@@ -248,7 +291,7 @@ export default async function Home() {
                 </div>
               </div>
 
-              <div className="mt-4 flex gap-[3px] h-8 items-end">
+              <div className="heartbeat-bar mt-4 flex gap-[3px] h-8 items-end">
                 {Array.from({ length: 60 }).map((_, i) => {
                   const c = checks[checks.length - 1 - i];
                   const cls = !c

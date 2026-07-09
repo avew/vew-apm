@@ -35,9 +35,9 @@ export default async function DashboardLayout({
               <Activity className="w-4.5 h-4.5" />
             </span>
             <span className="tracking-tight">
-              APM
+              Vew APM
               <span className="ml-1.5 text-[var(--muted)] font-normal hidden md:inline">
-                actuator monitor
+                - Trust ur monitor
               </span>
             </span>
           </Link>
@@ -51,6 +51,23 @@ export default async function DashboardLayout({
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6">
         {children}
       </main>
+      <footer className="border-t border-[var(--border)] py-4">
+        <div className="max-w-7xl mx-auto px-4 flex items-center justify-center gap-1 text-xs text-[var(--muted)]">
+          <span>Crafted with</span>
+          <span className="text-red-500" aria-label="love">♥</span>
+          <span>in Bandung by</span>
+          <a
+            href="https://saweria.co/asepthon"
+            target="_blank"
+            rel="noreferrer"
+            className="font-medium text-[var(--color-brand-600)] hover:underline"
+          >
+            avew
+          </a>
+          <span className="mx-1">·</span>
+          <span>2026</span>
+        </div>
+      </footer>
     </div>
   );
 }

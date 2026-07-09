@@ -7,8 +7,7 @@ import { uptimePct } from "@/lib/uptime";
 import { loadAlertSettings } from "@/lib/alerts";
 import { ResponseTimeChart } from "./response-chart";
 import { DiskChart } from "./disk-chart";
-import { RunNowButton } from "./run-now";
-import { DeleteMonitorButton } from "./delete-button";
+import { MonitorActions } from "./monitor-actions";
 import { ComponentTree } from "./component-tree";
 import { HealthProbes } from "./health-probes";
 import { ServiceRegistry } from "./service-registry";
@@ -219,6 +218,7 @@ export default async function MonitorDetail({
                 {monitor.name}
               </h1>
               <span className={`badge ${statusBadge}`}>{status}</span>
+              {!monitor.enabled && <span className="badge badge-muted">paused</span>}
               {muted && <span className="badge badge-warn">maintenance</span>}
             </div>
             <div className="text-sm text-[var(--muted)] mt-1 break-all font-mono">
@@ -228,11 +228,15 @@ export default async function MonitorDetail({
               interval {monitor.intervalSeconds}s · timeout {monitor.timeoutMs}ms
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <AutoRefresh />
-            <RunNowButton id={monitor.id} />
-            <DeleteMonitorButton id={monitor.id} />
-          </div>
+          <AutoRefresh />
+        </div>
+        <div className="mt-3">
+          <MonitorActions
+            id={monitor.id}
+            enabled={monitor.enabled}
+            name={monitor.name}
+            intervalSeconds={monitor.intervalSeconds}
+          />
         </div>
       </div>
 

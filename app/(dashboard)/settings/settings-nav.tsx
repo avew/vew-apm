@@ -1,10 +1,11 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { User, SlidersHorizontal, Bell, Wrench } from "lucide-react";
+import { User, SlidersHorizontal, Bell, Wrench, Palette } from "lucide-react";
 
 const TABS = [
   { href: "/settings", label: "General", icon: User, exact: true },
+  { href: "/settings/appearance", label: "Appearance", icon: Palette },
   { href: "/settings/alerts", label: "Alerts", icon: SlidersHorizontal },
   { href: "/settings/notifications", label: "Notifications", icon: Bell },
   { href: "/settings/maintenance", label: "Maintenance", icon: Wrench },

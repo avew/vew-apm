@@ -17,11 +17,11 @@ export default async function LoginPage({
       <div className="w-full max-w-sm space-y-6 card p-7">
         <div className="flex items-center gap-3">
           <span className="grid place-items-center w-11 h-11 rounded-xl bg-[var(--color-brand-600)] text-white shadow-sm text-xl font-bold">
-            A
+            V
           </span>
           <div>
             <h1 className="text-xl font-semibold tracking-tight leading-none">
-              APM
+              Vew APM
             </h1>
             <p className="text-sm text-[var(--muted)] mt-1">Sign in to continue.</p>
           </div>

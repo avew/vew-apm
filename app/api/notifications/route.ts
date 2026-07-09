@@ -15,27 +15,23 @@ const EmailConfig = z.object({
 const TelegramConfig = z.object({
   botToken: z.string().min(1),
   chatId: z.union([z.string().min(1), z.number()]),
+  messageThreadId: z.union([z.string(), z.number()]).optional(),
+  serverUrl: z.string().optional(),
+  silent: z.boolean().optional(),
+  protect: z.boolean().optional(),
+  template: z.string().optional(),
 });
 
+const common = {
+  name: z.string().min(1),
+  enabled: z.boolean().default(true),
+  applyAll: z.boolean().default(false),
+};
+
 const Body = z.discriminatedUnion("kind", [
-  z.object({
-    kind: z.literal("webhook"),
-    name: z.string().min(1),
-    enabled: z.boolean().default(true),
-    config: WebhookConfig,
-  }),
-  z.object({
-    kind: z.literal("email"),
-    name: z.string().min(1),
-    enabled: z.boolean().default(true),
-    config: EmailConfig,
-  }),
-  z.object({
-    kind: z.literal("telegram"),
-    name: z.string().min(1),
-    enabled: z.boolean().default(true),
-    config: TelegramConfig,
-  }),
+  z.object({ kind: z.literal("webhook"), ...common, config: WebhookConfig }),
+  z.object({ kind: z.literal("email"), ...common, config: EmailConfig }),
+  z.object({ kind: z.literal("telegram"), ...common, config: TelegramConfig }),
 ]);
 
 export async function GET() {
@@ -67,5 +63,19 @@ export async function POST(req: Request) {
       config: parse.data.config as object,
     })
     .returning();
+
+  // Attach to every existing monitor (explicit links) when requested.
+  if (parse.data.applyAll) {
+    const monitors = await db
+      .select({ id: schema.monitors.id })
+      .from(schema.monitors);
+    if (monitors.length > 0) {
+      await db
+        .insert(schema.monitorChannels)
+        .values(monitors.map((m) => ({ monitorId: m.id, channelId: row.id })))
+        .onConflictDoNothing();
+    }
+  }
+
   return NextResponse.json({ channel: row }, { status: 201 });
 }
