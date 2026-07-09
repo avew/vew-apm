@@ -1,26 +1,173 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --color-app-bg: #f6f7f9;
+  --color-app-surface: #ffffff;
+  --color-app-border: #e7e9ee;
+  --color-app-muted: #6b7280;
+
+  --color-brand-50: #eef4ff;
+  --color-brand-500: #4f6bed;
+  --color-brand-600: #3d55d1;
+  --color-brand-700: #3444ad;
+
+  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.04), 0 1px 3px rgb(16 24 40 / 0.06);
+  --shadow-card-hover: 0 4px 12px rgb(16 24 40 / 0.08), 0 2px 4px rgb(16 24 40 / 0.05);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+:root {
+  --background: var(--color-app-bg);
+  --foreground: #101422;
+  --surface: var(--color-app-surface);
+  --border: var(--color-app-border);
+  --muted: var(--color-app-muted);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #0a0c12;
+    --foreground: #e7e9ee;
+    --surface: #12151d;
+    --border: #232733;
+    --muted: #8b91a1;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  body {
+    background:
+      radial-gradient(1200px 600px at 100% -10%, rgb(79 107 237 / 0.06), transparent 60%),
+      radial-gradient(1000px 500px at -10% 10%, rgb(16 185 129 / 0.05), transparent 55%),
+      var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection {
+    background: rgb(79 107 237 / 0.25);
+  }
+}
+
+@layer components {
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0.875rem;
+    box-shadow: var(--shadow-card);
+  }
+  .card-hover {
+    transition:
+      box-shadow 0.18s ease,
+      transform 0.18s ease,
+      border-color 0.18s ease;
+  }
+  .card-hover:hover {
+    box-shadow: var(--shadow-card-hover);
+    transform: translateY(-2px);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    border-radius: 0.625rem;
+    padding: 0.5rem 0.875rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.15s ease;
+    cursor: pointer;
+  }
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .btn-primary {
+    background: var(--color-brand-600);
+    color: #fff;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--color-brand-700);
+  }
+  .btn-ghost {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--foreground);
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background: rgb(0 0 0 / 0.03);
+  }
+  .btn-danger {
+    background: var(--surface);
+    border: 1px solid rgb(239 68 68 / 0.4);
+    color: #dc2626;
+  }
+  .btn-danger:hover:not(:disabled) {
+    background: rgb(239 68 68 / 0.08);
+  }
+
+  .field-input {
+    margin-top: 0.25rem;
+    width: 100%;
+    border-radius: 0.625rem;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    transition:
+      border-color 0.15s ease,
+      box-shadow 0.15s ease;
+  }
+  .field-input:focus {
+    outline: none;
+    border-color: var(--color-brand-500);
+    box-shadow: 0 0 0 3px rgb(79 107 237 / 0.15);
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    border-radius: 9999px;
+    padding: 0.125rem 0.5rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+  .badge-up {
+    background: rgb(16 185 129 / 0.12);
+    color: #059669;
+  }
+  .badge-down {
+    background: rgb(239 68 68 / 0.12);
+    color: #dc2626;
+  }
+  .badge-warn {
+    background: rgb(245 158 11 / 0.14);
+    color: #d97706;
+  }
+  .badge-muted {
+    background: rgb(107 114 128 / 0.14);
+    color: var(--muted);
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .btn-ghost:hover:not(:disabled) {
+    background: rgb(255 255 255 / 0.04);
+  }
+  .badge-up {
+    color: #34d399;
+  }
+  .badge-down {
+    color: #f87171;
+  }
+  .badge-warn {
+    color: #fbbf24;
+  }
 }

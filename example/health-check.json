@@ -1,0 +1,165 @@
+{
+    "status": "UP",
+    "components": {
+        "clientConfigServer": {
+            "status": "UP",
+            "details": {
+                "propertySources": [
+                    "configserver:file:/data/spring-cloud-config/api-gateway/api-gateway-dev.properties",
+                    "configClient"
+                ]
+            }
+        },
+        "discoveryComposite": {
+            "status": "UP",
+            "components": {
+                "discoveryClient": {
+                    "status": "UP",
+                    "details": {
+                        "services": [
+                            "genta-svc",
+                            "surat-svc",
+                            "sip-konversi-svc",
+                            "import-svc",
+                            "sip-masa-svc",
+                            "master-svc",
+                            "admin-console-svc",
+                            "sip-tahunan-svc",
+                            "middleware-ppn-svc",
+                            "ppn-svc",
+                            "ppn-dokumenpenjualan-svc",
+                            "billing-svc",
+                            "scan-uni-svc",
+                            "api-gateway-op",
+                            "report-svc",
+                            "dms-svc",
+                            "dashboard-svc",
+                            "pph-21-svc",
+                            "pph-25-svc",
+                            "spt-tahunan-svc",
+                            "payroll-svc",
+                            "sonia-svc",
+                            "sip-main-svc",
+                            "integration-svc",
+                            "scheduler-svc",
+                            "pph-svc",
+                            "emeterai-svc"
+                        ]
+                    }
+                },
+                "eureka": {
+                    "description": "Remote status from Eureka server",
+                    "status": "UP",
+                    "details": {
+                        "applications": {
+                            "GENTA-SVC": 1,
+                            "SURAT-SVC": 1,
+                            "SIP-KONVERSI-SVC": 1,
+                            "IMPORT-SVC": 1,
+                            "SIP-MASA-SVC": 1,
+                            "MASTER-SVC": 1,
+                            "ADMIN-CONSOLE-SVC": 1,
+                            "SIP-TAHUNAN-SVC": 1,
+                            "MIDDLEWARE-PPN-SVC": 1,
+                            "PPN-SVC": 1,
+                            "PPN-DOKUMENPENJUALAN-SVC": 1,
+                            "BILLING-SVC": 1,
+                            "SCAN-UNI-SVC": 1,
+                            "API-GATEWAY-OP": 1,
+                            "REPORT-SVC": 1,
+                            "DMS-SVC": 1,
+                            "DASHBOARD-SVC": 1,
+                            "PPH-21-SVC": 1,
+                            "PPH-25-SVC": 1,
+                            "SPT-TAHUNAN-SVC": 1,
+                            "PAYROLL-SVC": 1,
+                            "SONIA-SVC": 1,
+                            "SIP-MAIN-SVC": 1,
+                            "INTEGRATION-SVC": 1,
+                            "SCHEDULER-SVC": 1,
+                            "PPH-SVC": 1,
+                            "EMETERAI-SVC": 1
+                        }
+                    }
+                }
+            }
+        },
+        "diskSpace": {
+            "status": "UP",
+            "details": {
+                "total": 210652876800,
+                "free": 73920110592,
+                "threshold": 10485760,
+                "path": "/.",
+                "exists": true
+            }
+        },
+        "livenessState": {
+            "status": "UP"
+        },
+        "ping": {
+            "status": "UP"
+        },
+        "reactiveDiscoveryClients": {
+            "status": "UP",
+            "components": {
+                "Simple Reactive Discovery Client": {
+                    "status": "UP",
+                    "details": {
+                        "services": []
+                    }
+                },
+                "Spring Cloud Eureka Reactive Discovery Client": {
+                    "status": "UP",
+                    "details": {
+                        "services": [
+                            "genta-svc",
+                            "surat-svc",
+                            "sip-konversi-svc",
+                            "import-svc",
+                            "sip-masa-svc",
+                            "master-svc",
+                            "admin-console-svc",
+                            "sip-tahunan-svc",
+                            "middleware-ppn-svc",
+                            "ppn-svc",
+                            "ppn-dokumenpenjualan-svc",
+                            "billing-svc",
+                            "scan-uni-svc",
+                            "api-gateway-op",
+                            "report-svc",
+                            "dms-svc",
+                            "dashboard-svc",
+                            "pph-21-svc",
+                            "pph-25-svc",
+                            "spt-tahunan-svc",
+                            "payroll-svc",
+                            "sonia-svc",
+                            "sip-main-svc",
+                            "integration-svc",
+                            "scheduler-svc",
+                            "pph-svc",
+                            "emeterai-svc"
+                        ]
+                    }
+                }
+            }
+        },
+        "readinessState": {
+            "status": "UP"
+        },
+        "redis": {
+            "status": "UP",
+            "details": {
+                "version": "7.4.7"
+            }
+        },
+        "refreshScope": {
+            "status": "UP"
+        }
+    },
+    "groups": [
+        "liveness",
+        "readiness"
+    ]
+}
