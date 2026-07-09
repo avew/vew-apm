@@ -1,0 +1,14 @@
+.git
+node_modules
+.next
+data
+*.db
+*.db-wal
+*.db-shm
+.env
+.env.*
+!.env.example
+npm-debug.log*
+.DS_Store
+drizzle
+scratchpad

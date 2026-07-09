@@ -1,0 +1,22 @@
+services:
+  apm:
+    build: .
+    image: vew-apm:latest
+    container_name: vew-apm
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      # SQLite file on the persistent volume
+      DATABASE_URL: /data/apm.db
+      # required: signs the session cookie (>= 32 chars). Set in .env
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env}
+      # optional
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:3000}
+      # in-process scheduler tick (ms)
+      APM_SCHEDULER_TICK_MS: ${APM_SCHEDULER_TICK_MS:-5000}
+    volumes:
+      - apm-data:/data
+
+volumes:
+  apm-data:

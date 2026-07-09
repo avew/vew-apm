@@ -61,6 +61,15 @@ npm run dev            # http://localhost:3000 → /setup to create the admin
 
 First visit redirects to `/setup` to create the admin, then `/login`.
 
+### Docker
+
+```bash
+cp .env.example .env      # set SESSION_SECRET
+docker compose up -d --build   # → http://localhost:3000
+```
+
+Full guide: [DOCKER.md](DOCKER.md).
+
 ### Add a monitor
 
 New monitor → point at any `/actuator/health` URL. No live backend? Use the
