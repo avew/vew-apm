@@ -10,7 +10,7 @@ export default async function SetupPage() {
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="w-full max-w-sm space-y-6 card p-7">
         <div className="flex items-center gap-3">
-          <span className="grid place-items-center w-11 h-11 rounded-xl bg-[var(--color-brand-600)] text-white shadow-sm text-xl font-bold">
+          <span className="grid place-items-center w-11 h-11 rounded-xl bg-[var(--foreground)] text-[var(--background)] text-xl font-bold">
             V
           </span>
           <div>

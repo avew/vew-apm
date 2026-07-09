@@ -235,6 +235,7 @@ export default async function MonitorDetail({
             id={monitor.id}
             enabled={monitor.enabled}
             name={monitor.name}
+            url={monitor.url}
             intervalSeconds={monitor.intervalSeconds}
           />
         </div>
@@ -301,7 +302,11 @@ export default async function MonitorDetail({
           appearing in the health check (past the grace window) is marked DOWN
           and raises an incident.
         </p>
-        <ServiceRegistry monitorId={monitor.id} services={registry} />
+        <ServiceRegistry
+          monitorId={monitor.id}
+          services={registry}
+          latestCheckAt={checks[0] ? new Date(checks[0].checkedAt).getTime() : null}
+        />
       </section>
 
       {eureka.length > 0 && (

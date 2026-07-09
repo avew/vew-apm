@@ -1,14 +1,22 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { getDb, schema } from "@/lib/db/client";
 import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/session";
 
+const Body = z.object({
+  name: z.string().min(1).max(120).optional(),
+  url: z.string().url().optional(),
+});
+
 export async function POST(
-  _req: Request,
+  req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
   await requireUser();
   const { id } = await ctx.params;
+  const parse = Body.safeParse(await req.json().catch(() => ({})));
+  const override = parse.success ? parse.data : {};
   const db = getDb();
   const [m] = await db
     .select()
@@ -20,8 +28,8 @@ export async function POST(
   const [clone] = await db
     .insert(schema.monitors)
     .values({
-      name: `${m.name} (copy)`,
-      url: m.url,
+      name: override.name?.trim() || `${m.name} (copy)`,
+      url: override.url?.trim() || m.url,
       method: m.method,
       intervalSeconds: m.intervalSeconds,
       timeoutMs: m.timeoutMs,
@@ -38,17 +46,6 @@ export async function POST(
       serviceGraceSeconds: m.serviceGraceSeconds,
     })
     .returning();
-
-  // copy notification channel links
-  const links = await db
-    .select({ channelId: schema.monitorChannels.channelId })
-    .from(schema.monitorChannels)
-    .where(eq(schema.monitorChannels.monitorId, m.id));
-  if (links.length > 0) {
-    await db.insert(schema.monitorChannels).values(
-      links.map((l) => ({ monitorId: clone.id, channelId: l.channelId })),
-    );
-  }
 
   return NextResponse.json({ id: clone.id }, { status: 201 });
 }

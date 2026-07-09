@@ -64,21 +64,21 @@ export function AutoRefresh() {
     lastAt && clock ? Math.round((clock.getTime() - lastAt) / 1000) : null;
 
   return (
-    <div className="flex items-center gap-2 text-sm">
+    <div className="flex items-center gap-3 text-sm">
       <button
         onClick={refresh}
-        className="btn btn-ghost !px-2.5 relative"
+        className="btn btn-ghost !px-2.5"
         title="Refresh now"
         aria-busy={spin}
       >
         <RefreshCw
-          className={`w-4 h-4 transition-transform ${spin ? "animate-spin text-[var(--color-brand-600)]" : ""}`}
+          className={`w-4 h-4 transition-transform ${spin ? "animate-spin text-[var(--foreground)]" : ""}`}
         />
       </button>
       <select
         value={interval}
         onChange={(e) => setInterval(Number(e.target.value))}
-        className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-sm"
+        className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm"
         title="Auto-refresh interval"
       >
         {OPTIONS.map((o) => (
@@ -87,15 +87,18 @@ export function AutoRefresh() {
           </option>
         ))}
       </select>
-      <div className="flex flex-col leading-tight" suppressHydrationWarning>
+      <div
+        className="hidden sm:flex flex-col leading-snug pl-1 min-w-[92px]"
+        suppressHydrationWarning
+      >
         <span className="text-xs font-medium tabular-nums text-[var(--foreground)]">
-          {clock ? clock.toLocaleTimeString() : " "}
+          {clock ? clock.toLocaleTimeString() : "--:--:--"}
         </span>
         <span className="text-[10px] text-[var(--muted)] tabular-nums">
           {spin
             ? "refreshing…"
             : secsAgo === null
-              ? " "
+              ? "updated -- -- --"
               : secsAgo <= 1
                 ? "updated just now"
                 : `updated ${secsAgo}s ago`}

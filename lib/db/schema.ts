@@ -3,7 +3,6 @@ import {
   integer,
   text,
   real,
-  primaryKey,
   index,
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
@@ -150,19 +149,6 @@ export const notificationChannels = sqliteTable("notification_channels", {
   enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
   createdAt: ts("created_at"),
 });
-
-export const monitorChannels = sqliteTable(
-  "monitor_channels",
-  {
-    monitorId: integer("monitor_id")
-      .notNull()
-      .references(() => monitors.id, { onDelete: "cascade" }),
-    channelId: integer("channel_id")
-      .notNull()
-      .references(() => notificationChannels.id, { onDelete: "cascade" }),
-  },
-  (t) => [primaryKey({ columns: [t.monitorId, t.channelId] })],
-);
 
 export const maintenanceWindows = sqliteTable("maintenance_windows", {
   id: integer("id").primaryKey({ autoIncrement: true }),

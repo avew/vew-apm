@@ -4,53 +4,69 @@
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 
-  --color-app-bg: #f6f7f9;
+  /* Warm, paper-clean light surface (Profound-style) */
+  --color-app-bg: #f6f5f2;
   --color-app-surface: #ffffff;
-  --color-app-border: #e7e9ee;
-  --color-app-muted: #6b7280;
+  --color-app-border: #e9e7e1;
+  --color-app-muted: #74716a;
 
-  --color-brand-50: #eef4ff;
-  --color-brand-500: #4f6bed;
-  --color-brand-600: #3d55d1;
-  --color-brand-700: #3444ad;
+  /* Muted, restrained accent (used sparingly for active/links) */
+  --color-brand-50: #eef1f4;
+  --color-brand-500: #4a5a6a;
+  --color-brand-600: #3a4753;
+  --color-brand-700: #2b343d;
 
-  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.04), 0 1px 3px rgb(16 24 40 / 0.06);
-  --shadow-card-hover: 0 4px 12px rgb(16 24 40 / 0.08), 0 2px 4px rgb(16 24 40 / 0.05);
+  /* Flat, near-shadowless — cleanliness over depth */
+  --shadow-card: 0 1px 2px rgb(17 17 17 / 0.03);
+  --shadow-card-hover: 0 6px 20px rgb(17 17 17 / 0.06);
 }
 
 :root {
   --background: var(--color-app-bg);
-  --foreground: #101422;
+  --foreground: #1a1917;
   --surface: var(--color-app-surface);
   --border: var(--color-app-border);
   --muted: var(--color-app-muted);
+  /* near-black primary CTA (light) */
+  --btn-primary-bg: #1a1917;
+  --btn-primary-bg-hover: #000000;
+  --btn-primary-fg: #ffffff;
 }
 
 /* Auto (default): follow OS preference. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --background: #0a0c12;
-    --foreground: #e7e9ee;
-    --surface: #12151d;
-    --border: #232733;
-    --muted: #8b91a1;
+    --background: #0b0b0c;
+    --foreground: #ededec;
+    --surface: #151517;
+    --border: #262528;
+    --muted: #8f8c86;
+    --btn-primary-bg: #ffffff;
+    --btn-primary-bg-hover: #e6e5e3;
+    --btn-primary-fg: #141414;
   }
 }
 
 /* Explicit user choice — wins over OS preference. */
 :root[data-theme="light"] {
   --background: var(--color-app-bg);
-  --foreground: #101422;
+  --foreground: #1a1917;
   --surface: var(--color-app-surface);
   --border: var(--color-app-border);
   --muted: var(--color-app-muted);
+  --btn-primary-bg: #1a1917;
+  --btn-primary-bg-hover: #000000;
+  --btn-primary-fg: #ffffff;
 }
 :root[data-theme="dark"] {
-  --background: #0a0c12;
-  --foreground: #e7e9ee;
-  --surface: #12151d;
-  --border: #232733;
-  --muted: #8b91a1;
+  --background: #0b0b0c;
+  --foreground: #ededec;
+  --surface: #151517;
+  --border: #262528;
+  --muted: #8f8c86;
+  --btn-primary-bg: #ffffff;
+  --btn-primary-bg-hover: #e6e5e3;
+  --btn-primary-fg: #141414;
 }
 
 @layer base {
@@ -58,16 +74,15 @@
     border-color: var(--border);
   }
   body {
-    background:
-      radial-gradient(1200px 600px at 100% -10%, rgb(79 107 237 / 0.06), transparent 60%),
-      radial-gradient(1000px 500px at -10% 10%, rgb(16 185 129 / 0.05), transparent 55%),
-      var(--background);
+    /* flat, clean — no gradient */
+    background: var(--background);
     color: var(--foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+    letter-spacing: -0.01em;
   }
   ::selection {
-    background: rgb(79 107 237 / 0.25);
+    background: rgb(26 25 23 / 0.12);
   }
 }
 
@@ -75,18 +90,17 @@
   .card {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 0.875rem;
+    border-radius: 1rem;
     box-shadow: var(--shadow-card);
   }
   .card-hover {
     transition:
-      box-shadow 0.18s ease,
-      transform 0.18s ease,
-      border-color 0.18s ease;
+      box-shadow 0.2s ease,
+      border-color 0.2s ease;
   }
   .card-hover:hover {
     box-shadow: var(--shadow-card-hover);
-    transform: translateY(-2px);
+    border-color: color-mix(in srgb, var(--foreground) 18%, var(--border));
   }
 
   .btn {
@@ -105,11 +119,11 @@
     cursor: not-allowed;
   }
   .btn-primary {
-    background: var(--color-brand-600);
-    color: #fff;
+    background: var(--btn-primary-bg);
+    color: var(--btn-primary-fg);
   }
   .btn-primary:hover:not(:disabled) {
-    background: var(--color-brand-700);
+    background: var(--btn-primary-bg-hover);
   }
   .btn-ghost {
     background: var(--surface);
@@ -142,8 +156,8 @@
   }
   .field-input:focus {
     outline: none;
-    border-color: var(--color-brand-500);
-    box-shadow: 0 0 0 3px rgb(79 107 237 / 0.15);
+    border-color: color-mix(in srgb, var(--foreground) 45%, var(--border));
+    box-shadow: 0 0 0 3px rgb(26 25 23 / 0.08);
   }
 
   .badge {

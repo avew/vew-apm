@@ -1,20 +1,14 @@
 "use client";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { NotificationChannel } from "@/lib/db/schema";
 
-export function MonitorForm({
-  channels,
-}: {
-  channels: NotificationChannel[];
-}) {
+export function MonitorForm() {
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [intervalSeconds, setInterval] = useState(60);
   const [timeoutMs, setTimeoutMs] = useState(10000);
   const [authHeaderName, setAuthName] = useState("");
   const [authHeaderValue, setAuthValue] = useState("");
-  const [channelIds, setChannelIds] = useState<number[]>([]);
   const [showOverrides, setShowOverrides] = useState(false);
   const [ov, setOv] = useState({
     diskWarnPct: "",
@@ -43,7 +37,6 @@ export function MonitorForm({
             timeoutMs,
             authHeaderName: authHeaderName || undefined,
             authHeaderValue: authHeaderValue || undefined,
-            channelIds,
             diskWarnPct: ovNum(ov.diskWarnPct),
             diskCritPct: ovNum(ov.diskCritPct),
             downForMinutes: ovNum(ov.downForMinutes),
@@ -121,35 +114,6 @@ export function MonitorForm({
           />
         </Field>
       </div>
-
-      {channels.length > 0 && (
-        <Field label="Notification channels">
-          <div className="space-y-1">
-            {channels.map((c) => (
-              <label key={c.id} className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={channelIds.includes(c.id)}
-                  onChange={(e) =>
-                    setChannelIds((prev) =>
-                      e.target.checked
-                        ? [...prev, c.id]
-                        : prev.filter((id) => id !== c.id),
-                    )
-                  }
-                />
-                <span>
-                  {c.name}{" "}
-                  <span className="text-neutral-500">({c.kind})</span>
-                </span>
-              </label>
-            ))}
-          </div>
-          <p className="text-xs text-neutral-500 mt-1">
-            Leave empty to broadcast to all enabled channels.
-          </p>
-        </Field>
-      )}
 
       <div className="border-t border-[var(--border)] pt-3">
         <button

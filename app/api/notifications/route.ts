@@ -9,6 +9,7 @@ const WebhookConfig = z.object({
   headers: z.record(z.string(), z.string()).optional(),
 });
 const EmailConfig = z.object({
+  apiKey: z.string().min(1),
   from: z.string().min(1),
   to: z.array(z.string().email()).min(1),
 });
@@ -25,7 +26,6 @@ const TelegramConfig = z.object({
 const common = {
   name: z.string().min(1),
   enabled: z.boolean().default(true),
-  applyAll: z.boolean().default(false),
 };
 
 const Body = z.discriminatedUnion("kind", [
@@ -63,19 +63,6 @@ export async function POST(req: Request) {
       config: parse.data.config as object,
     })
     .returning();
-
-  // Attach to every existing monitor (explicit links) when requested.
-  if (parse.data.applyAll) {
-    const monitors = await db
-      .select({ id: schema.monitors.id })
-      .from(schema.monitors);
-    if (monitors.length > 0) {
-      await db
-        .insert(schema.monitorChannels)
-        .values(monitors.map((m) => ({ monitorId: m.id, channelId: row.id })))
-        .onConflictDoNothing();
-    }
-  }
 
   return NextResponse.json({ channel: row }, { status: 201 });
 }

@@ -13,7 +13,6 @@ const PatchBody = z.object({
   authHeaderName: z.string().max(120).nullable().optional(),
   authHeaderValue: z.string().max(2000).nullable().optional(),
   enabled: z.boolean().optional(),
-  channelIds: z.array(z.number().int()).optional(),
   // Alert threshold overrides (null = clear override → inherit global)
   diskWarnPct: z.number().min(1).max(100).nullable().optional(),
   diskCritPct: z.number().min(1).max(100).nullable().optional(),
@@ -40,14 +39,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     .from(schema.monitors)
     .where(eq(schema.monitors.id, id));
   if (!row) return NextResponse.json({ error: "not found" }, { status: 404 });
-  const channels = await db
-    .select({ channelId: schema.monitorChannels.channelId })
-    .from(schema.monitorChannels)
-    .where(eq(schema.monitorChannels.monitorId, id));
-  return NextResponse.json({
-    monitor: row,
-    channelIds: channels.map((c) => c.channelId),
-  });
+  return NextResponse.json({ monitor: row });
 }
 
 export async function PATCH(
@@ -61,22 +53,12 @@ export async function PATCH(
     return NextResponse.json({ error: "invalid input" }, { status: 400 });
   }
   const db = getDb();
-  const { channelIds, ...updates } = parse.data;
+  const updates = parse.data;
   if (Object.keys(updates).length > 0) {
     await db
       .update(schema.monitors)
       .set({ ...updates, updatedAt: new Date() })
       .where(eq(schema.monitors.id, id));
-  }
-  if (channelIds) {
-    await db
-      .delete(schema.monitorChannels)
-      .where(eq(schema.monitorChannels.monitorId, id));
-    if (channelIds.length > 0) {
-      await db.insert(schema.monitorChannels).values(
-        channelIds.map((cid) => ({ monitorId: id, channelId: cid })),
-      );
-    }
   }
   return NextResponse.json({ ok: true });
 }

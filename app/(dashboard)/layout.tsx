@@ -31,7 +31,7 @@ export default async function DashboardLayout({
       <header className="sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--surface)]/80 backdrop-blur-md">
         <div className="max-w-7xl mx-auto flex items-center justify-between px-4 h-14 gap-4">
           <Link href="/" className="flex items-center gap-2 font-semibold shrink-0">
-            <span className="grid place-items-center w-8 h-8 rounded-lg bg-[var(--color-brand-600)] text-white shadow-sm">
+            <span className="grid place-items-center w-8 h-8 rounded-lg bg-[var(--foreground)] text-[var(--background)]">
               <Activity className="w-4.5 h-4.5" />
             </span>
             <span className="tracking-tight">

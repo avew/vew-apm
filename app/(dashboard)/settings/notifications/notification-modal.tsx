@@ -27,11 +27,11 @@ function Toggle({
       >
         <span
           className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
-            checked ? "bg-[var(--color-brand-600)]" : "bg-neutral-300 dark:bg-neutral-700"
+            checked ? "bg-[var(--foreground)]" : "bg-neutral-300 dark:bg-neutral-700"
           }`}
         >
           <span
-            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+            className={`inline-block h-4 w-4 transform rounded-full bg-[var(--surface)] transition-transform ${
               checked ? "translate-x-4" : "translate-x-0.5"
             }`}
           />
@@ -63,11 +63,12 @@ export function NotificationModal({ onClose }: { onClose: () => void }) {
   // webhook
   const [url, setUrl] = useState("");
   // email
+  const [emailApiKey, setEmailApiKey] = useState("");
+  const [showApiKey, setShowApiKey] = useState(false);
   const [emailFrom, setEmailFrom] = useState("");
   const [emailTo, setEmailTo] = useState("");
   // common
-  const [defaultEnabled, setDefaultEnabled] = useState(true);
-  const [applyAll, setApplyAll] = useState(false);
+  const [enabled, setEnabled] = useState(true);
 
   function buildConfig(): Record<string, unknown> | null {
     if (kind === "telegram") {
@@ -89,8 +90,8 @@ export function NotificationModal({ onClose }: { onClose: () => void }) {
     }
     // email
     const to = emailTo.split(",").map((s) => s.trim()).filter(Boolean);
-    if (!emailFrom.trim() || to.length === 0) return null;
-    return { from: emailFrom.trim(), to };
+    if (!emailApiKey.trim() || !emailFrom.trim() || to.length === 0) return null;
+    return { apiKey: emailApiKey.trim(), from: emailFrom.trim(), to };
   }
 
   function doTest() {
@@ -126,8 +127,7 @@ export function NotificationModal({ onClose }: { onClose: () => void }) {
         body: JSON.stringify({
           kind,
           name: name.trim(),
-          enabled: defaultEnabled,
-          applyAll,
+          enabled,
           config,
         }),
       });
@@ -174,7 +174,7 @@ export function NotificationModal({ onClose }: { onClose: () => void }) {
             >
               <option value="telegram">Telegram</option>
               <option value="webhook">Webhook</option>
-              <option value="email">Email (Resend)</option>
+              <option value="email">Email (via Resend)</option>
             </select>
           </label>
 
@@ -307,6 +307,37 @@ export function NotificationModal({ onClose }: { onClose: () => void }) {
           {kind === "email" && (
             <>
               <label className="block text-sm">
+                <span className="font-medium">Resend API Key</span>
+                <div className="relative">
+                  <input
+                    className={`${cls} pr-10`}
+                    type={showApiKey ? "text" : "password"}
+                    value={emailApiKey}
+                    onChange={(e) => setEmailApiKey(e.target.value)}
+                    placeholder="re_xxxxxxxxxxxxxxxx"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowApiKey((s) => !s)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--foreground)]"
+                  >
+                    {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <span className="text-xs text-[var(--muted)]">
+                  Per-channel key — get one at{" "}
+                  <a
+                    href="https://resend.com/api-keys"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[var(--color-brand-600)] hover:underline"
+                  >
+                    resend.com/api-keys
+                  </a>
+                  .
+                </span>
+              </label>
+              <label className="block text-sm">
                 <span className="font-medium">From</span>
                 <input
                   className={cls}
@@ -324,7 +355,7 @@ export function NotificationModal({ onClose }: { onClose: () => void }) {
                   placeholder="ops@company.com, oncall@company.com"
                 />
                 <span className="text-xs text-[var(--muted)]">
-                  Comma-separated. Uses <code>RESEND_API_KEY</code> from env.
+                  Comma-separated recipients.
                 </span>
               </label>
             </>
@@ -333,16 +364,10 @@ export function NotificationModal({ onClose }: { onClose: () => void }) {
           <hr className="border-[var(--border)]" />
 
           <Toggle
-            checked={defaultEnabled}
-            onChange={setDefaultEnabled}
-            label="Default enabled"
-            hint="Enabled by default. You can still mute it per monitor."
-          />
-          <Toggle
-            checked={applyAll}
-            onChange={setApplyAll}
-            label="Apply on all existing monitors"
-            hint="Link this channel to every monitor that already exists."
+            checked={enabled}
+            onChange={setEnabled}
+            label="Enabled"
+            hint="This channel notifies for all monitors. Disable to pause it without deleting."
           />
 
           {msg && (

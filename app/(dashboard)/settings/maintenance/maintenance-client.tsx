@@ -220,7 +220,7 @@ export function MaintenanceClient({
                     onClick={() => setEndsAt(addMinutesToLocal(startsAt, d.min))}
                     className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                       active
-                        ? "border-[var(--color-brand-600)] text-[var(--color-brand-700)] bg-[var(--color-brand-50)] dark:bg-[rgb(79_107_237/0.15)] dark:text-[#8ea2ff]"
+                        ? "border-[var(--foreground)] text-[var(--foreground)] bg-black/[0.06] dark:bg-white/[0.08]"
                         : "border-[var(--border)] text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-black/5 dark:hover:bg-white/5"
                     }`}
                   >

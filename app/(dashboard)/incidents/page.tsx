@@ -125,7 +125,7 @@ export default async function IncidentsPage({
             href={t.key === "open" ? "/incidents" : `/incidents?filter=${t.key}`}
             className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
               filter === t.key
-                ? "bg-[var(--color-brand-50)] text-[var(--color-brand-700)] dark:bg-[rgb(79_107_237/0.15)] dark:text-[#8ea2ff]"
+                ? "bg-black/[0.06] text-[var(--foreground)] dark:bg-white/[0.08]"
                 : "text-[var(--muted)] hover:bg-black/5 dark:hover:bg-white/5"
             }`}
           >

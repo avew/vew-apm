@@ -29,7 +29,7 @@ export function ChannelsClient({
 
       {initial.length === 0 ? (
         <div className="card p-10 text-center">
-          <div className="mx-auto w-12 h-12 grid place-items-center rounded-full bg-[var(--color-brand-50)] dark:bg-[rgb(79_107_237/0.12)] mb-3">
+          <div className="mx-auto w-12 h-12 grid place-items-center rounded-full bg-black/[0.05] dark:bg-white/[0.06] mb-3">
             <Bell className="w-6 h-6 text-[var(--color-brand-600)]" />
           </div>
           <p className="text-[var(--muted)]">No notification channels yet.</p>
@@ -65,6 +65,36 @@ function ChannelRow({ channel }: { channel: NotificationChannel }) {
         {msg && <div className="text-xs text-emerald-600 mt-0.5">{msg}</div>}
       </div>
       <div className="flex items-center gap-1 shrink-0">
+        <button
+          type="button"
+          disabled={pending}
+          title={channel.enabled ? "Enabled — click to pause" : "Disabled — click to enable"}
+          onClick={() =>
+            start(async () => {
+              await fetch(`/api/notifications/${channel.id}`, {
+                method: "PATCH",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ enabled: !channel.enabled }),
+              });
+              router.refresh();
+            })
+          }
+          className="mr-1"
+        >
+          <span
+            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+              channel.enabled
+                ? "bg-[var(--foreground)]"
+                : "bg-neutral-300 dark:bg-neutral-700"
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 rounded-full bg-[var(--surface)] transition-transform ${
+                channel.enabled ? "translate-x-4" : "translate-x-0.5"
+              }`}
+            />
+          </span>
+        </button>
         <button
           disabled={pending}
           onClick={() =>

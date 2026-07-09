@@ -13,7 +13,6 @@ const CreateBody = z.object({
   authHeaderName: z.string().max(120).optional(),
   authHeaderValue: z.string().max(2000).optional(),
   enabled: z.boolean().default(true),
-  channelIds: z.array(z.number().int()).default([]),
   // Alert threshold overrides (null/omit = inherit global)
   diskWarnPct: z.number().min(1).max(100).nullish(),
   diskCritPct: z.number().min(1).max(100).nullish(),
@@ -44,7 +43,7 @@ export async function POST(req: Request) {
     );
   }
   const db = getDb();
-  const { channelIds, ...m } = parse.data;
+  const m = parse.data;
   const [row] = await db
     .insert(schema.monitors)
     .values({
@@ -65,10 +64,5 @@ export async function POST(req: Request) {
       serviceGraceSeconds: m.serviceGraceSeconds ?? null,
     })
     .returning();
-  if (channelIds.length > 0) {
-    await db.insert(schema.monitorChannels).values(
-      channelIds.map((cid) => ({ monitorId: row.id, channelId: cid })),
-    );
-  }
   return NextResponse.json({ monitor: row }, { status: 201 });
 }

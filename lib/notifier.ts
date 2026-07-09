@@ -1,7 +1,7 @@
 import { getDb, schema } from "@/lib/db/client";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { sendWebhook } from "./notifiers/webhook";
-import { sendEmail } from "./notifiers/email";
+import { sendEmail, type EmailConfig } from "./notifiers/email";
 import { sendTelegram, type TelegramConfig } from "./notifiers/telegram";
 import type { Monitor } from "@/lib/db/schema";
 import type { Severity, AlertKind } from "./rules";
@@ -46,26 +46,9 @@ function renderText(ev: Event): { subject: string; body: string } {
   };
 }
 
-async function loadChannelsForMonitor(monitorId: number) {
+/** Notifications are global: every enabled channel fires for every monitor. */
+async function loadEnabledChannels() {
   const db = getDb();
-  const links = await db
-    .select({ channelId: schema.monitorChannels.channelId })
-    .from(schema.monitorChannels)
-    .where(eq(schema.monitorChannels.monitorId, monitorId));
-  if (links.length > 0) {
-    return db
-      .select()
-      .from(schema.notificationChannels)
-      .where(
-        and(
-          eq(schema.notificationChannels.enabled, true),
-          inArray(
-            schema.notificationChannels.id,
-            links.map((l) => l.channelId),
-          ),
-        ),
-      );
-  }
   return db
     .select()
     .from(schema.notificationChannels)
@@ -73,7 +56,7 @@ async function loadChannelsForMonitor(monitorId: number) {
 }
 
 export async function dispatch(ev: Event): Promise<void> {
-  const channels = await loadChannelsForMonitor(ev.monitor.id);
+  const channels = await loadEnabledChannels();
   if (channels.length === 0) return;
   const { subject, body } = renderText(ev);
   const payload = {
@@ -100,7 +83,7 @@ export async function dispatch(ev: Event): Promise<void> {
         if (c.kind === "webhook") {
           await sendWebhook(cfg as { url: string; headers?: Record<string, string> }, payload);
         } else if (c.kind === "email") {
-          await sendEmail(cfg as { from: string; to: string[] }, subject, body);
+          await sendEmail(cfg as unknown as EmailConfig, subject, body);
         } else if (c.kind === "telegram") {
           const tg = cfg as unknown as TelegramConfig & { template?: string };
           const text = tg.template
@@ -134,7 +117,7 @@ export async function sendTestConfig(
       { kind: "test", message: body },
     );
   } else if (kind === "email") {
-    await sendEmail(cfg as { from: string; to: string[] }, subject, body);
+    await sendEmail(cfg as unknown as EmailConfig, subject, body);
   } else if (kind === "telegram") {
     await sendTelegram(cfg as unknown as TelegramConfig, `*${subject}*\n\n${body}`);
   } else {

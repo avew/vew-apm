@@ -15,20 +15,39 @@ function ago(d: Date | string) {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+// A service is only meaningfully "up" if it appeared in the most recent check.
+// If the latest check failed (gateway unreachable), previously-present services
+// are "stale" — we can't confirm them, so don't show a green UP.
+function serviceState(
+  s: MonitorService,
+  latestCheckAt: number | null,
+): "up" | "down" | "stale" {
+  if (!s.present) return "down";
+  if (latestCheckAt == null) return "up";
+  const seen = new Date(s.lastSeenAt).getTime();
+  return seen >= latestCheckAt - 5000 ? "up" : "stale";
+}
+
 export function ServiceRegistry({
   monitorId,
   services,
+  latestCheckAt,
 }: {
   monitorId: number;
   services: MonitorService[];
+  latestCheckAt: number | null;
 }) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  const upCount = services.filter((s) => s.present).length;
-  const downCount = services.filter((s) => s.tracked && !s.present).length;
+  const states = services.map((s) => serviceState(s, latestCheckAt));
+  const upCount = states.filter((x) => x === "up").length;
+  const staleCount = states.filter((x) => x === "stale").length;
+  const downCount = services.filter(
+    (s, i) => s.tracked && states[i] === "down",
+  ).length;
 
   return (
     <div className="space-y-3">
@@ -37,6 +56,7 @@ export function ServiceRegistry({
         <span className="text-emerald-600 dark:text-emerald-400">
           {upCount} up
         </span>
+        {staleCount > 0 && <span>{staleCount} stale</span>}
         {downCount > 0 && (
           <span className="text-red-600 dark:text-red-400 font-medium">
             {downCount} down
@@ -97,8 +117,14 @@ export function ServiceRegistry({
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border)]">
-              {services.map((s) => (
-                <ServiceRow key={s.id} monitorId={monitorId} service={s} agoText={ago(s.lastSeenAt)} />
+              {services.map((s, i) => (
+                <ServiceRow
+                  key={s.id}
+                  monitorId={monitorId}
+                  service={s}
+                  state={states[i]}
+                  agoText={ago(s.lastSeenAt)}
+                />
               ))}
             </tbody>
           </table>
@@ -111,21 +137,32 @@ export function ServiceRegistry({
 function ServiceRow({
   monitorId,
   service: s,
+  state,
   agoText,
 }: {
   monitorId: number;
   service: MonitorService;
+  state: "up" | "down" | "stale";
   agoText: string;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
-  const down = !s.present;
+  const badge =
+    state === "up" ? "badge-up" : state === "stale" ? "badge-muted" : "badge-down";
+  const label = state === "up" ? "UP" : state === "stale" ? "STALE" : "DOWN";
   return (
-    <tr className={down && s.tracked ? "bg-red-50/40 dark:bg-red-950/10" : ""}>
+    <tr className={state === "down" && s.tracked ? "bg-red-50/40 dark:bg-red-950/10" : ""}>
       <td className="py-2 font-mono text-xs">{s.serviceName}</td>
       <td className="py-2">
-        <span className={`badge ${s.present ? "badge-up" : "badge-down"}`}>
-          {s.present ? "UP" : "DOWN"}
+        <span
+          className={`badge ${badge}`}
+          title={
+            state === "stale"
+              ? "Not seen in the latest check — the endpoint was unreachable, so this service's state is unknown"
+              : undefined
+          }
+        >
+          {label}
         </span>
       </td>
       <td className="py-2 text-xs text-[var(--muted)]">{s.source}</td>

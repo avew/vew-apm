@@ -202,7 +202,7 @@ export default async function Home() {
 
       {monitors.length === 0 && (
         <div className="card p-12 text-center">
-          <div className="mx-auto w-12 h-12 grid place-items-center rounded-full bg-[var(--color-brand-50)] dark:bg-[rgb(79_107_237/0.12)] mb-3">
+          <div className="mx-auto w-12 h-12 grid place-items-center rounded-full bg-black/[0.05] dark:bg-white/[0.06] mb-3">
             <Plus className="w-6 h-6 text-[var(--color-brand-600)]" />
           </div>
           <p className="text-[var(--muted)]">No monitors yet.</p>

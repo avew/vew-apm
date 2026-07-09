@@ -1,13 +1,18 @@
 import { Resend } from "resend";
 
+export interface EmailConfig {
+  apiKey: string;
+  from: string;
+  to: string[];
+}
+
 export async function sendEmail(
-  config: { from: string; to: string[] },
+  config: EmailConfig,
   subject: string,
   text: string,
 ): Promise<void> {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) throw new Error("RESEND_API_KEY not set");
-  const resend = new Resend(apiKey);
+  if (!config.apiKey) throw new Error("Resend API key is not set");
+  const resend = new Resend(config.apiKey);
   const { error } = await resend.emails.send({
     from: config.from,
     to: config.to,

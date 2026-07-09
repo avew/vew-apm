@@ -21,7 +21,7 @@ export function Nav({ ongoingCount = 0 }: { ongoingCount?: number }) {
             href={href}
             className={`relative flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-medium transition-colors ${
               active
-                ? "bg-[var(--color-brand-50)] text-[var(--color-brand-700)] dark:bg-[rgb(79_107_237/0.15)] dark:text-[#8ea2ff]"
+                ? "bg-black/[0.06] text-[var(--foreground)] dark:bg-white/[0.08]"
                 : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-black/5 dark:hover:bg-white/5"
             }`}
           >
