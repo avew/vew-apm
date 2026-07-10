@@ -28,6 +28,8 @@ disk usage as a time series, and can't track Eureka registry membership.
   - Global defaults in **Settings → Alerts**, optional **per-monitor overrides**.
 - **Service registry** — auto-seeds every service on first sight; marks `DOWN`
   when a tracked service vanishes, `STALE` when the endpoint is unreachable.
+- **Monitor groups** — an optional label per monitor; the dashboard and public
+  status page section monitors by group (named groups first, ungrouped last).
 - **Health probes** panel — plain-language liveness/readiness with K8s consequence.
 - **Incidents** — global page + per-monitor log, ongoing count badge, auto-resolve.
 - **Notifications** — global channels (webhook / email via Resend / Telegram);

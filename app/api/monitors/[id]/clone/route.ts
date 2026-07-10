@@ -44,6 +44,9 @@ export async function POST(
       latencyWindow: m.latencyWindow,
       eurekaDropAlert: m.eurekaDropAlert,
       serviceGraceSeconds: m.serviceGraceSeconds,
+      componentGraceSeconds: m.componentGraceSeconds,
+      renotifyMinutes: m.renotifyMinutes,
+      group: m.group,
     })
     .returning();
 

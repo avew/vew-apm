@@ -1,0 +1,1 @@
+ALTER TABLE `monitors` ADD `group_name` text;

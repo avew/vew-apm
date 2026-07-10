@@ -241,6 +241,7 @@ export default async function MonitorDetail({
             name={monitor.name}
             url={monitor.url}
             intervalSeconds={monitor.intervalSeconds}
+            group={monitor.group}
             thresholds={{
               monitorId: monitor.id,
               current: {
