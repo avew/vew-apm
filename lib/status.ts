@@ -6,7 +6,27 @@ import type { StatusPage } from "@/lib/db/schema";
 export type PublicState = "operational" | "degraded" | "down";
 export type DaySeg = "up" | "partial" | "down" | "none";
 
-export const HISTORY_DAYS = 90;
+export type StatusWindow = "24h" | "7d" | "90d";
+
+export const STATUS_WINDOWS: {
+  key: StatusWindow;
+  label: string;
+  buckets: number;
+  bucketMs: number;
+  agoLabel: string;
+}[] = [
+  { key: "24h", label: "24h", buckets: 24, bucketMs: 3_600_000, agoLabel: "24 hours ago" },
+  { key: "7d", label: "7d", buckets: 7, bucketMs: 86_400_000, agoLabel: "7 days ago" },
+  { key: "90d", label: "90d", buckets: 90, bucketMs: 86_400_000, agoLabel: "90 days ago" },
+];
+
+export function parseWindow(w: string | undefined): StatusWindow {
+  return w === "24h" || w === "7d" || w === "90d" ? w : "90d";
+}
+
+function windowConfig(w: StatusWindow) {
+  return STATUS_WINDOWS.find((x) => x.key === w) ?? STATUS_WINDOWS[2];
+}
 
 // Generic, infra-agnostic labels — the public page must not leak component
 // paths, service names, disk paths, or raw incident reasons.
@@ -143,18 +163,32 @@ export interface PublicStatus {
   enabled: boolean;
   title: string;
   overall: PublicState;
+  window: StatusWindow;
   services: PublicService[];
   incidents: PublicIncident[];
   moreIncidents: number;
 }
 
-/** Per-day up/partial/down history for the last HISTORY_DAYS days (oldest→newest). */
-async function dailyHistory(monitorId: number, now: Date): Promise<DaySeg[]> {
+/**
+ * Up/partial/down history for the window (oldest→newest). 24h buckets by hour,
+ * 7d/90d by day. Buckets with no checks render "none" (gray).
+ */
+async function history(
+  monitorId: number,
+  now: Date,
+  win: StatusWindow,
+): Promise<DaySeg[]> {
   const db = getDb();
-  const since = new Date(now.getTime() - HISTORY_DAYS * 86_400_000);
+  const cfg = windowConfig(win);
+  const hourly = win === "24h";
+  const since = new Date(now.getTime() - cfg.buckets * cfg.bucketMs);
+  const bucketExpr = hourly
+    ? sql<string>`strftime('%Y-%m-%dT%H', ${schema.checks.checkedAt}, 'unixepoch')`
+    : sql<string>`strftime('%Y-%m-%d', ${schema.checks.checkedAt}, 'unixepoch')`;
+
   const rows = await db
     .select({
-      day: sql<string>`date(${schema.checks.checkedAt}, 'unixepoch')`.as("day"),
+      bucket: bucketExpr.as("bucket"),
       total: sql<number>`count(*)`.as("total"),
       up: sql<number>`sum(case when ${schema.checks.overallStatus} = 'UP' then 1 else 0 end)`.as("up"),
     })
@@ -166,20 +200,26 @@ async function dailyHistory(monitorId: number, now: Date): Promise<DaySeg[]> {
         gte(schema.checks.checkedAt, since),
       ),
     )
-    .groupBy(sql`date(${schema.checks.checkedAt}, 'unixepoch')`);
+    .groupBy(bucketExpr);
 
-  const byDay = new Map(rows.map((r) => [r.day, r]));
+  const byBucket = new Map(rows.map((r) => [r.bucket, r]));
   const out: DaySeg[] = [];
-  for (let i = HISTORY_DAYS - 1; i >= 0; i--) {
-    const day = new Date(now.getTime() - i * 86_400_000).toISOString().slice(0, 10);
-    const r = byDay.get(day);
+  for (let i = cfg.buckets - 1; i >= 0; i--) {
+    const d = new Date(now.getTime() - i * cfg.bucketMs);
+    const key = hourly
+      ? d.toISOString().slice(0, 13)
+      : d.toISOString().slice(0, 10);
+    const r = byBucket.get(key);
     out.push(r ? segState(r.total, r.up) : "none");
   }
   return out;
 }
 
 /** Everything the public /status page renders. Only opt-in, enabled monitors. */
-export async function getPublicStatus(now: Date): Promise<PublicStatus> {
+export async function getPublicStatus(
+  now: Date,
+  win: StatusWindow = "90d",
+): Promise<PublicStatus> {
   const db = getDb();
   const settings = await loadStatusPageSettings();
 
@@ -193,7 +233,8 @@ export async function getPublicStatus(now: Date): Promise<PublicStatus> {
     .where(and(eq(schema.monitors.public, true), eq(schema.monitors.enabled, true)))
     .orderBy(schema.monitors.name);
 
-  const historyStart = new Date(now.getTime() - HISTORY_DAYS * 86_400_000);
+  const cfg = windowConfig(win);
+  const uptimeStart = new Date(now.getTime() - cfg.buckets * cfg.bucketMs);
   const weekAgo = new Date(now.getTime() - 7 * 86_400_000);
 
   const rawIncidents: {
@@ -206,9 +247,9 @@ export async function getPublicStatus(now: Date): Promise<PublicStatus> {
 
   const services = await Promise.all(
     monitors.map(async (m): Promise<PublicService> => {
-      const [up, history, open, recent] = await Promise.all([
-        uptimePct(m.id, historyStart),
-        dailyHistory(m.id, now),
+      const [up, hist, open, recent] = await Promise.all([
+        uptimePct(m.id, uptimeStart),
+        history(m.id, now, win),
         db
           .select({
             kind: schema.incidents.kind,
@@ -266,7 +307,7 @@ export async function getPublicStatus(now: Date): Promise<PublicStatus> {
         name: m.name,
         state: deriveState(m.lastStatus, open),
         uptimePct: up.upPct,
-        history,
+        history: hist,
       };
     }),
   );
@@ -277,6 +318,7 @@ export async function getPublicStatus(now: Date): Promise<PublicStatus> {
     enabled: settings.enabled,
     title: settings.title,
     overall: overallState(services.map((s) => s.state)),
+    window: win,
     services,
     incidents: shown,
     moreIncidents: more,

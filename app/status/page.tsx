@@ -2,7 +2,8 @@ import { notFound } from "next/navigation";
 import { formatDistanceToNowStrict, isToday, isYesterday, format } from "date-fns";
 import {
   getPublicStatus,
-  HISTORY_DAYS,
+  parseWindow,
+  STATUS_WINDOWS,
   type PublicState,
   type DaySeg,
   type PublicIncident,
@@ -85,12 +86,18 @@ function withHeaders(
   });
 }
 
-export default async function StatusPage() {
-  const status = await getPublicStatus(new Date());
+export default async function StatusPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ window?: string }>;
+}) {
+  const win = parseWindow((await searchParams).window);
+  const status = await getPublicStatus(new Date(), win);
   if (!status.enabled) notFound();
 
   const banner = STATE_META[status.overall];
   const incidentRows = withHeaders(status.incidents);
+  const wcfg = STATUS_WINDOWS.find((w) => w.key === status.window)!;
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-10 sm:py-16">
@@ -103,6 +110,28 @@ export default async function StatusPage() {
           <span className="text-sm font-medium">{banner.banner}</span>
         </div>
       </header>
+
+      {status.services.length > 0 && (
+        <div className="mb-4 flex items-center justify-end gap-1">
+          <span className="mr-1 text-xs text-[var(--muted)]">Uptime window</span>
+          {STATUS_WINDOWS.map((w) => {
+            const active = w.key === status.window;
+            return (
+              <a
+                key={w.key}
+                href={`/status?window=${w.key}`}
+                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                  active
+                    ? "bg-black/[0.07] text-[var(--foreground)] dark:bg-white/[0.1]"
+                    : "text-[var(--muted)] hover:text-[var(--foreground)]"
+                }`}
+              >
+                {w.label}
+              </a>
+            );
+          })}
+        </div>
+      )}
 
       {status.services.length === 0 ? (
         <p className="text-sm text-[var(--muted)]">
@@ -125,9 +154,9 @@ export default async function StatusPage() {
                 </div>
                 <UptimeBar history={s.history} />
                 <div className="mt-1.5 flex items-center justify-between text-xs text-[var(--muted)]">
-                  <span>{HISTORY_DAYS} days ago</span>
+                  <span>{wcfg.agoLabel}</span>
                   <span>{pct(s.uptimePct)} uptime</span>
-                  <span>Today</span>
+                  <span>{status.window === "24h" ? "Now" : "Today"}</span>
                 </div>
               </li>
             );
