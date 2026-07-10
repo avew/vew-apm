@@ -124,66 +124,78 @@ async function fetchHealth(monitor: Monitor): Promise<FetchResult> {
   }
 }
 
-async function persistCheck(
+function persistCheck(
   monitor: Monitor,
   result: FetchResult,
   muted: boolean,
-): Promise<{ checkId: number; componentStatuses: Map<string, string> }> {
+): { checkId: number; componentStatuses: Map<string, string> } {
   const db = getDb();
+  // One transaction: atomic (no orphan check without its child rows on a crash)
+  // and a single WAL commit instead of ~4 fsyncs per check. better-sqlite3
+  // transactions are synchronous, so this callback must stay sync.
   // raw_json intentionally NOT stored per check (avoids unbounded blob growth);
   // propertySources are recoverable from component_statuses details.
-  const [row] = await db
-    .insert(schema.checks)
-    .values({
-      monitorId: monitor.id,
-      overallStatus: result.overall,
-      responseMs: result.responseMs,
-      httpStatus: result.httpStatus ?? undefined,
-      errorText: result.errorText ?? undefined,
-      muted,
-    })
-    .returning({ id: schema.checks.id });
-  const checkId = row.id;
+  return db.transaction((tx) => {
+    const [row] = tx
+      .insert(schema.checks)
+      .values({
+        monitorId: monitor.id,
+        overallStatus: result.overall,
+        responseMs: result.responseMs,
+        httpStatus: result.httpStatus ?? undefined,
+        errorText: result.errorText ?? undefined,
+        muted,
+      })
+      .returning({ id: schema.checks.id })
+      .all();
+    const checkId = row.id;
 
-  const compMap = new Map<string, string>();
-  if (result.parsed) {
-    const { components, disks, services } = result.parsed;
-    if (components.length > 0) {
-      await db.insert(schema.componentStatuses).values(
-        components.map((c) => ({
-          checkId,
-          path: c.path,
-          status: c.status,
-          details: (c.details as object) ?? undefined,
-        })),
-      );
-      for (const c of components) compMap.set(c.path, c.status);
+    const compMap = new Map<string, string>();
+    if (result.parsed) {
+      const { components, disks, services } = result.parsed;
+      if (components.length > 0) {
+        tx.insert(schema.componentStatuses)
+          .values(
+            components.map((c) => ({
+              checkId,
+              path: c.path,
+              status: c.status,
+              details: (c.details as object) ?? undefined,
+            })),
+          )
+          .run();
+        for (const c of components) compMap.set(c.path, c.status);
+      }
+      if (disks.length > 0) {
+        tx.insert(schema.diskSnapshots)
+          .values(
+            disks.map((d) => ({
+              checkId,
+              diskPath: d.diskPath ?? undefined,
+              totalBytes: d.totalBytes,
+              freeBytes: d.freeBytes,
+              usedPct: d.usedPct,
+              thresholdBytes: d.thresholdBytes ?? undefined,
+            })),
+          )
+          .run();
+      }
+      if (services.length > 0) {
+        tx.insert(schema.serviceSnapshots)
+          .values(
+            services.map((s) => ({
+              checkId,
+              source: s.source,
+              serviceName: s.serviceName,
+              instanceCount: s.instanceCount,
+            })),
+          )
+          .run();
+      }
     }
-    if (disks.length > 0) {
-      await db.insert(schema.diskSnapshots).values(
-        disks.map((d) => ({
-          checkId,
-          diskPath: d.diskPath ?? undefined,
-          totalBytes: d.totalBytes,
-          freeBytes: d.freeBytes,
-          usedPct: d.usedPct,
-          thresholdBytes: d.thresholdBytes ?? undefined,
-        })),
-      );
-    }
-    if (services.length > 0) {
-      await db.insert(schema.serviceSnapshots).values(
-        services.map((s) => ({
-          checkId,
-          source: s.source,
-          serviceName: s.serviceName,
-          instanceCount: s.instanceCount,
-        })),
-      );
-    }
-  }
 
-  return { checkId, componentStatuses: compMap };
+    return { checkId, componentStatuses: compMap };
+  });
 }
 
 async function loadRecentChecks(monitorId: number, limit: number) {
@@ -561,7 +573,7 @@ export async function runCheck(monitor: Monitor): Promise<void> {
   const now = new Date();
   const result = await fetchHealth(monitor);
   const muted = await isMonitorMuted(monitor.id, now);
-  await persistCheck(monitor, result, muted);
+  persistCheck(monitor, result, muted);
   await reconcileIncidents(monitor, result, now, muted);
   await db
     .update(schema.monitors)
