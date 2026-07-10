@@ -56,13 +56,14 @@ export function AppearanceClient({ initialLang }: { initialLang: Lang }) {
   const [draft, setDraft] = useState<Prefs>(saved);
   const [flash, setFlash] = useState(false);
 
-  // hydrate committed prefs from storage on mount
+  // hydrate committed prefs from storage on mount (localStorage is client-only)
   useEffect(() => {
     const p: Prefs = {
       lang: ((localStorage.getItem("apm.lang") as Lang) || initialLang) as Lang,
       theme: (localStorage.getItem("apm.theme") as Theme) || "auto",
       hb: (localStorage.getItem("apm.heartbeat") as Hb) || "normal",
     };
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSaved(p);
     setDraft(p);
   }, [initialLang]);

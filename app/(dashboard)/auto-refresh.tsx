@@ -37,15 +37,18 @@ export function AutoRefresh() {
     });
   }, [router]);
 
-  // live ticking clock
+  // live ticking clock — seed after mount to avoid an SSR hydration mismatch
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setClock(new Date());
     const id = globalThis.setInterval(() => setClock(new Date()), 1000);
     return () => globalThis.clearInterval(id);
   }, []);
 
   useEffect(() => {
+    // localStorage is client-only; hydrate the saved interval after mount.
     const saved = localStorage.getItem(STORAGE_KEY);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (saved !== null) setInterval(Number(saved));
   }, []);
 

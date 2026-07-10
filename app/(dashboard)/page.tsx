@@ -171,6 +171,8 @@ export default async function Home() {
                 const endsAt = new Date(w.endsAt);
                 const remainingMin = Math.max(
                   0,
+                  // Server component: renders once per request, so Date.now() is stable here.
+                  // eslint-disable-next-line react-hooks/purity
                   Math.round((endsAt.getTime() - Date.now()) / 60000),
                 );
                 const remaining =

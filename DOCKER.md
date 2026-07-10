@@ -65,6 +65,20 @@ docker run -d --name vew-apm -p 3000:3000 \
   vew-apm:latest
 ```
 
+## Use the prebuilt image (no build)
+
+CI publishes an image to GHCR on every push to `main` (`:latest`, `:sha-<commit>`)
+and on version tags (`:vX.Y.Z`). Skip building and pull it:
+
+```bash
+docker run -d --name vew-apm -p 3000:3000 \
+  -v vew-apm-data:/data \
+  ghcr.io/avew/vew-apm:latest
+```
+
+Or point Compose at it instead of building — replace the `build: .` line in
+`docker-compose.yml` with `image: ghcr.io/avew/vew-apm:latest`.
+
 ## Operations
 
 | Task | Command |

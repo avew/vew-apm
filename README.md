@@ -1,5 +1,8 @@
 # Vew APM — Trust ur monitor
 
+[![CI](https://github.com/avew/vew-apm/actions/workflows/ci.yml/badge.svg)](https://github.com/avew/vew-apm/actions/workflows/ci.yml)
+[![Docker](https://github.com/avew/vew-apm/actions/workflows/docker.yml/badge.svg)](https://github.com/avew/vew-apm/actions/workflows/docker.yml)
+
 Application Performance Monitor for Spring Boot microservices. It polls each
 service's `/actuator/health` endpoint on a configurable interval, parses the
 deeply-nested actuator JSON, stores history, and raises incidents on threshold
