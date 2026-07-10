@@ -144,6 +144,9 @@ troubleshooting: **[DOCKER.md](DOCKER.md)**.
   `retentionDays` hourly — set it in **Settings → Alerts → Data retention**
   (default 30 days; 0 = keep forever). `raw_json` is not stored per check to keep
   the DB small; property sources come from the component records.
+- **Health**: `GET /api/health` reports Vew APM's own liveness (DB reachable +
+  scheduler ticking) as `200`/`503` — public, no auth. The Docker image wires it
+  into a `HEALTHCHECK` so orchestrators see `healthy`/`unhealthy`.
 
 ## Environment
 

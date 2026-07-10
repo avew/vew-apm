@@ -31,7 +31,8 @@ Key files in `lib/`:
 - `rules.ts` — **pure** rule engine → `DesiredAlert[]` keyed by `(kind, componentPath)`. Unit-tested. Keep it pure (no DB); the checker feeds it DB-derived inputs (`badComponents`, `eurekaMissing`, history).
 - `alerts.ts` — `EffectiveThresholds` = global `alert_settings` merged with per-monitor overrides (`monitor.x ?? global.x`). Add a new threshold in ALL of: `EffectiveThresholds`, `ALERT_DEFAULTS`, `mergeThresholds`, `getEffectiveThresholds`, schema (`alert_settings` + `monitors` nullable), the two API zod schemas, and both forms.
 - `checker.ts` — orchestration + all DB history queries (service registry sync, sustained-bad components).
-- `notifier.ts` + `notifiers/{webhook,email,telegram}.ts` — channels are **global**: every enabled channel fires for every monitor (no per-monitor linking). `dispatch` wraps each send in `withRetry` (`retry.ts`); senders throw `NotifyError{retryable}` — network/timeout/429/5xx retry with backoff, other 4xx stop. Test-send is single-attempt.
+- `scheduler.ts` — in-process tick loop; liveness state (`started`/`lastTickAt`) kept on `globalThis` behind `Symbol.for` because Next bundles instrumentation and route handlers separately (a module-level `let` would be duplicated per bundle and invisible to `/api/health`). `GET /api/health` (public in `middleware.ts`) reads it: DB `SELECT 1` + tick freshness → 200/503; drives the Docker `HEALTHCHECK`.
+- `notifier.ts` + `notifiers/{webhook,email,telegram}.ts` — channels are **global**: every enabled channel fires for every monitor (no per-monitor linking).
 - `maintenance.ts` — `isMonitorMuted`; muted incidents get `suppressed=true`, no notify, uptime unaffected.
 - `i18n.ts` (dict) + `i18n-server.ts` (`getT` from `apm_lang` cookie, server components) + `i18n-client.tsx` (`LangProvider`/`useT`, client). Missing keys fall back to English.
 
