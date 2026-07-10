@@ -56,17 +56,26 @@ async function loadRecentChecks(monitorId: number, limit: number) {
 async function loadLatestComponents(monitorId: number) {
   const db = getDb();
   const [latest] = await db
-    .select({ id: schema.checks.id, rawJson: schema.checks.rawJson })
+    .select({ id: schema.checks.id })
     .from(schema.checks)
     .where(eq(schema.checks.monitorId, monitorId))
     .orderBy(desc(schema.checks.checkedAt))
     .limit(1);
-  if (!latest) return { components: [], rawJson: null };
+  if (!latest) return { components: [] };
   const rows = await db
     .select()
     .from(schema.componentStatuses)
     .where(eq(schema.componentStatuses.checkId, latest.id));
-  return { components: rows, rawJson: latest.rawJson };
+  return { components: rows };
+}
+
+// propertySources live in the clientConfigServer component's details
+function propertySourcesFrom(
+  components: { path: string; details: unknown }[],
+): string[] {
+  const cfg = components.find((c) => c.path === "clientConfigServer");
+  const ps = (cfg?.details as { propertySources?: unknown } | null)?.propertySources;
+  return Array.isArray(ps) ? ps.filter((p): p is string => typeof p === "string") : [];
 }
 
 async function loadDiskHistory(monitorId: number) {
@@ -142,15 +151,6 @@ async function loadIncidents(monitorId: number) {
   });
 }
 
-async function loadPropertySources(rawJson: unknown): Promise<string[]> {
-  if (typeof rawJson !== "object" || rawJson === null) return [];
-  const j = rawJson as Record<string, unknown>;
-  const comps = (j.components as Record<string, unknown>) ?? {};
-  const cfg = comps.clientConfigServer as { details?: { propertySources?: unknown } } | undefined;
-  const ps = cfg?.details?.propertySources;
-  if (Array.isArray(ps)) return ps.filter((p): p is string => typeof p === "string");
-  return [];
-}
 
 export default async function MonitorDetail({
   params,
@@ -166,7 +166,7 @@ export default async function MonitorDetail({
   const now = new Date();
   const [
     checks,
-    { components, rawJson },
+    { components },
     disk,
     services,
     incidents,
@@ -188,7 +188,9 @@ export default async function MonitorDetail({
     loadAlertSettings(),
   ]);
   const registry = await loadServiceRegistry(monitorId);
-  const propertySources = await loadPropertySources(rawJson);
+  const propertySources = propertySourcesFrom(
+    components as { path: string; details: unknown }[],
+  );
   const t = await getT();
 
   const status = monitor.lastStatus ?? "UNKNOWN";

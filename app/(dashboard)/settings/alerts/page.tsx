@@ -25,6 +25,7 @@ export default async function AlertsSettingsPage() {
             eurekaDropAlert: settings.eurekaDropAlert,
             serviceGraceSeconds: settings.serviceGraceSeconds,
             componentGraceSeconds: settings.componentGraceSeconds,
+            retentionDays: settings.retentionDays,
           }}
         />
       </section>

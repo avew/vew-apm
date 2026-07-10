@@ -137,6 +137,10 @@ troubleshooting: **[DOCKER.md](DOCKER.md)**.
   external scheduler / Vercel Cron. `vercel.json` registers `* * * * *`.
   > SQLite is local-disk; on serverless use a persistent host, or swap the
   > Drizzle driver for a hosted DB.
+- **Retention**: the scheduler prunes checks (and their snapshots) older than
+  `retentionDays` hourly — set it in **Settings → Alerts → Data retention**
+  (default 30 days; 0 = keep forever). `raw_json` is not stored per check to keep
+  the DB small; property sources come from the component records.
 
 ## Environment
 

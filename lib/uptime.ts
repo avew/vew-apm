@@ -18,6 +18,8 @@ export async function uptimePct(
       and(
         eq(schema.checks.monitorId, monitorId),
         gte(schema.checks.checkedAt, since),
+        // exclude checks taken during a maintenance window
+        eq(schema.checks.muted, false),
       ),
     );
   const r = rows[0] ?? { total: 0, up: 0 };

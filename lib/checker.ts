@@ -75,8 +75,11 @@ async function fetchHealth(monitor: Monitor): Promise<FetchResult> {
 async function persistCheck(
   monitor: Monitor,
   result: FetchResult,
+  muted: boolean,
 ): Promise<{ checkId: number; componentStatuses: Map<string, string> }> {
   const db = getDb();
+  // raw_json intentionally NOT stored per check (avoids unbounded blob growth);
+  // propertySources are recoverable from component_statuses details.
   const [row] = await db
     .insert(schema.checks)
     .values({
@@ -85,7 +88,7 @@ async function persistCheck(
       responseMs: result.responseMs,
       httpStatus: result.httpStatus ?? undefined,
       errorText: result.errorText ?? undefined,
-      rawJson: (result.rawJson as object) ?? undefined,
+      muted,
     })
     .returning({ id: schema.checks.id });
   const checkId = row.id;
@@ -340,6 +343,7 @@ async function reconcileIncidents(
   monitor: Monitor,
   result: FetchResult,
   now: Date,
+  muted: boolean,
 ): Promise<void> {
   const db = getDb();
   const thresholds = await getEffectiveThresholds(monitor);
@@ -401,8 +405,6 @@ async function reconcileIncidents(
       r,
     ]),
   );
-
-  const muted = await isMonitorMuted(monitor.id, now);
 
   // Open new alerts.
   for (const [key, a] of desired) {
@@ -475,8 +477,9 @@ export async function runCheck(monitor: Monitor): Promise<void> {
   const db = getDb();
   const now = new Date();
   const result = await fetchHealth(monitor);
-  await persistCheck(monitor, result);
-  await reconcileIncidents(monitor, result, now);
+  const muted = await isMonitorMuted(monitor.id, now);
+  await persistCheck(monitor, result, muted);
+  await reconcileIncidents(monitor, result, now, muted);
   await db
     .update(schema.monitors)
     .set({

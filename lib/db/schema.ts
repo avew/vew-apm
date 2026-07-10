@@ -54,6 +54,8 @@ export const checks = sqliteTable(
     responseMs: integer("response_ms"),
     httpStatus: integer("http_status"),
     errorText: text("error_text"),
+    // true if a maintenance window was active at check time → excluded from uptime%
+    muted: integer("muted", { mode: "boolean" }).notNull().default(false),
     rawJson: text("raw_json", { mode: "json" }),
   },
   (t) => [index("checks_monitor_time_idx").on(t.monitorId, t.checkedAt)],
@@ -186,6 +188,8 @@ export const alertSettings = sqliteTable("alert_settings", {
     .default(true),
   serviceGraceSeconds: integer("service_grace_seconds").notNull().default(30),
   componentGraceSeconds: integer("component_grace_seconds").notNull().default(60),
+  // days of check history to keep; 0 = keep forever
+  retentionDays: integer("retention_days").notNull().default(30),
   updatedAt: ts("updated_at"),
 });
 
