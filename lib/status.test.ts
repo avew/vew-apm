@@ -4,6 +4,7 @@ import {
   overallState,
   publicIncidentLabel,
   groupIncidents,
+  segState,
 } from "./status";
 
 const at = (min: number) => new Date(2026, 0, 1, 12, min); // deterministic times
@@ -89,5 +90,23 @@ describe("groupIncidents", () => {
     const { shown, more } = groupIncidents(raw);
     expect(shown).toHaveLength(10);
     expect(more).toBe(4);
+  });
+
+  it("groups the same label across different services separately", () => {
+    const { shown } = groupIncidents([
+      { serviceName: "adri", label: "Storage pressure", severity: "warning", ongoing: false, startedAt: at(1) },
+      { serviceName: "etax", label: "Storage pressure", severity: "warning", ongoing: false, startedAt: at(2) },
+    ]);
+    expect(shown).toHaveLength(2);
+  });
+});
+
+describe("segState", () => {
+  it("maps a day's up-ratio to a bar color", () => {
+    expect(segState(0, 0)).toBe("none");
+    expect(segState(100, 100)).toBe("up");
+    expect(segState(100, 99)).toBe("up"); // >= 99%
+    expect(segState(100, 95)).toBe("partial"); // >= 90%
+    expect(segState(100, 50)).toBe("down");
   });
 });
