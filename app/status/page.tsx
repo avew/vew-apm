@@ -93,7 +93,7 @@ export default async function StatusPage() {
   const incidentRows = withHeaders(status.incidents);
 
   return (
-    <main className="mx-auto max-w-2xl px-4 py-10 sm:py-16">
+    <main className="mx-auto max-w-4xl px-6 py-10 sm:py-16">
       <header className="mb-8">
         <h1 className="text-2xl font-semibold tracking-tight">{status.title}</h1>
         <div
