@@ -1,0 +1,25 @@
+version: 2
+updates:
+  # App dependencies. Group minor/patch into one PR to cut noise; majors stay
+  # separate so breaking bumps get their own review.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  # Keep the GitHub Actions pinned in .github/workflows up to date.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+
+  # Watch the Dockerfile base image (node:22-bookworm-slim).
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly

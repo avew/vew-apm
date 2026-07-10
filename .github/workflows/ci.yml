@@ -43,3 +43,17 @@ jobs:
         env:
           SESSION_SECRET: build-time-placeholder-build-time-placeholder
           DATABASE_URL: /tmp/build.db
+
+  # Separate, non-blocking-by-default job: surfaces known vulns without gating
+  # merges on transitive advisories (not in the branch-protection required set).
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: npm audit (high + critical)
+        run: npm audit --audit-level=high
