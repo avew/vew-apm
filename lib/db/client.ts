@@ -20,6 +20,10 @@ export function getDb() {
   const sqlite = new Database(file);
   sqlite.pragma("journal_mode = WAL");
   sqlite.pragma("foreign_keys = ON");
+  // Wait up to 5s for a lock instead of throwing SQLITE_BUSY immediately — the
+  // in-process scheduler and web requests both write, and WAL only lets one
+  // writer at a time, so brief writer-vs-writer contention is expected.
+  sqlite.pragma("busy_timeout = 5000");
   cached = drizzle(sqlite, { schema });
   return cached;
 }
