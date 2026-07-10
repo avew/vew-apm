@@ -10,5 +10,4 @@ data
 !.env.example
 npm-debug.log*
 .DS_Store
-drizzle
 scratchpad

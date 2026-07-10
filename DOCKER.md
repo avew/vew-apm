@@ -31,8 +31,8 @@ cp .env.example .env      # then optionally set SESSION_SECRET / CRON_SECRET
 docker compose up -d --build
 ```
 
-On start the entrypoint provisions the secrets (if absent), runs `db:push`
-(creates/updates the SQLite schema on the volume), then `next start`.
+On start the entrypoint provisions the secrets (if absent), applies DB
+migrations, then starts the standalone server.
 
 Open **http://localhost:3000** → you'll be sent to `/setup` to create the admin,
 then `/login`.
@@ -92,14 +92,20 @@ docker compose start
 
 ## How it works
 
-- **Multi-stage build** ([Dockerfile](Dockerfile)): the builder compiles the
-  `better-sqlite3` native addon and runs `next build`; the runner is the same
-  Debian base (glibc match) without the build toolchain.
-- **Schema**: `npm run db:push` runs at container start against the volume DB.
+- **Multi-stage build** ([Dockerfile](Dockerfile)): the builder compiles
+  `better-sqlite3` and runs a **Next standalone** build (`output: "standalone"`);
+  the runner carries only the traced server + the native addon → ~450 MB image
+  (no dev deps, no build toolchain).
+- **Migrations**: [scripts/migrate.cjs](scripts/migrate.cjs) applies the
+  drizzle-generated SQL in `drizzle/` at container start using better-sqlite3
+  only (no drizzle-kit at runtime), tracked in a `_migrations` table.
 - **Checks**: the in-process scheduler ([lib/scheduler.ts](lib/scheduler.ts)) ticks
   every `APM_SCHEDULER_TICK_MS` (default 5000) — no cron/webhook needed.
 - **Persistence**: everything is in the `apm-data` volume; the container is
   otherwise stateless.
+
+> Schema changes: run `npm run db:generate` (commits a new file to `drizzle/`) so
+> the migrator picks it up on the next container start.
 
 ## Notes & troubleshooting
 

@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1783656392768,
+      "tag": "0000_sharp_red_skull",
+      "breakpoints": true
+    }
+  ]
+}

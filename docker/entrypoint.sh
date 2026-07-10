@@ -25,6 +25,6 @@ if [ -z "$CRON_SECRET" ]; then
   echo "[entrypoint] using generated CRON_SECRET ($SECRET_DIR/.cron_secret)"
 fi
 
-# ensure schema, then run (checks run via the in-process scheduler)
-npm run db:push
-exec npm run start -- -H 0.0.0.0 -p 3000
+# apply migrations, then run the standalone server (in-process scheduler runs checks)
+node scripts/migrate.cjs
+exec node server.js
