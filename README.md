@@ -121,7 +121,7 @@ troubleshooting: **[DOCKER.md](DOCKER.md)**.
 |---|---|
 | `npm run dev` | Dev server + in-process scheduler |
 | `npm run build` / `start` | Production build / serve |
-| `npm test` | Vitest (parser + rules) |
+| `npm test` | Vitest — units (parser, rules, crypto, retry) + checker integration |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run db:push` | Apply schema to SQLite |
 | `npm run db:studio` | Drizzle Studio |
