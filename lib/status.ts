@@ -1,6 +1,7 @@
 import { getDb, schema } from "@/lib/db/client";
 import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { uptimePct } from "./uptime";
+import { currentOccurrence, nextOccurrence } from "./maintenance";
 import type { StatusPage } from "@/lib/db/schema";
 
 export type PublicState = "operational" | "degraded" | "down";
@@ -160,6 +161,17 @@ export interface PublicService {
   history: DaySeg[];
 }
 
+export interface PublicMaintenance {
+  id: number;
+  name: string;
+  reason: string | null;
+  scope: string; // "global" | "monitor"
+  serviceName: string | null;
+  start: Date;
+  end: Date;
+  active: boolean; // true = in progress now, false = upcoming
+}
+
 export interface PublicStatus {
   enabled: boolean;
   title: string;
@@ -168,7 +180,10 @@ export interface PublicStatus {
   services: PublicService[];
   incidents: PublicIncident[];
   moreIncidents: number;
+  maintenance: PublicMaintenance[];
 }
+
+const UPCOMING_WINDOW_MS = 7 * 86_400_000;
 
 /**
  * Up/partial/down history for the window (oldest→newest). 24h buckets by hour,
@@ -317,6 +332,44 @@ export async function getPublicStatus(
 
   const { shown, more } = groupIncidents(rawIncidents, 20);
 
+  // Public-safe maintenance: global windows + monitor-scoped ones whose monitor
+  // is public (never leak a private monitor's existence). Active now, or
+  // upcoming within the next 7 days.
+  const publicIds = new Set(monitors.map((m) => m.id));
+  const nameById = new Map(monitors.map((m) => [m.id, m.name]));
+  const windows = await db.select().from(schema.maintenanceWindows);
+  const maintenance: PublicMaintenance[] = [];
+  for (const w of windows) {
+    if (w.scope === "monitor" && (!w.monitorId || !publicIds.has(w.monitorId))) {
+      continue;
+    }
+    const serviceName =
+      w.scope === "monitor" && w.monitorId ? nameById.get(w.monitorId) ?? null : null;
+    const base = {
+      id: w.id,
+      name: w.name,
+      reason: w.reason,
+      scope: w.scope,
+      serviceName,
+    };
+    const cur = currentOccurrence(w, now);
+    if (cur) {
+      maintenance.push({ ...base, start: cur.start, end: cur.end, active: true });
+      continue;
+    }
+    const next = nextOccurrence(w, now);
+    if (next && next.start.getTime() <= now.getTime() + UPCOMING_WINDOW_MS) {
+      maintenance.push({ ...base, start: next.start, end: next.end, active: false });
+    }
+  }
+  maintenance.sort((a, b) =>
+    a.active === b.active
+      ? a.start.getTime() - b.start.getTime()
+      : a.active
+        ? -1
+        : 1,
+  );
+
   return {
     enabled: settings.enabled,
     title: settings.title,
@@ -325,5 +378,6 @@ export async function getPublicStatus(
     services,
     incidents: shown,
     moreIncidents: more,
+    maintenance,
   };
 }
