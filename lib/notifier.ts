@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { sendWebhook } from "./notifiers/webhook";
 import { sendEmail, type EmailConfig } from "./notifiers/email";
 import { sendTelegram, type TelegramConfig } from "./notifiers/telegram";
+import { withRetry } from "./retry";
 import type { Monitor } from "@/lib/db/schema";
 import type { Severity, AlertKind } from "./rules";
 
@@ -79,7 +80,8 @@ export async function dispatch(ev: Event): Promise<void> {
   await Promise.allSettled(
     channels.map(async (c) => {
       const cfg = c.config as Record<string, unknown>;
-      try {
+      const label = `${c.kind}#${c.id}`;
+      const send = async () => {
         if (c.kind === "webhook") {
           await sendWebhook(cfg as { url: string; headers?: Record<string, string> }, payload);
         } else if (c.kind === "email") {
@@ -97,8 +99,19 @@ export async function dispatch(ev: Event): Promise<void> {
             : `*${subject}*\n\n${body}`;
           await sendTelegram(tg, text);
         }
+      };
+      try {
+        // Retry transient failures (network/timeout/429/5xx); permanent 4xx
+        // stops immediately. Channels run in parallel, so one channel's backoff
+        // never delays the others.
+        await withRetry(send, {
+          onRetry: (err, attempt, delayMs) =>
+            console.warn(
+              `notifier ${label} attempt ${attempt} failed, retry in ${delayMs}ms: ${(err as Error).message}`,
+            ),
+        });
       } catch (err) {
-        console.error(`notifier ${c.kind}#${c.id} failed:`, err);
+        console.error(`notifier ${label} gave up after retries:`, err);
       }
     }),
   );
