@@ -37,6 +37,9 @@ disk usage as a time series, and can't track Eureka registry membership.
   warning → critical.
 - **Maintenance windows** — global or per-monitor, one-off or recurring, with
   timezone selector; suppress alerts without affecting uptime %.
+- **Public status page** — opt-in per monitor, no-login `/status` (off by
+  default). Shows status + 24h/7d/30d uptime + a generic incident timeline;
+  never exposes URLs, components, disk, service names, or raw reasons.
 - **Appearance** — light/dark/auto theme, heartbeat-bar style, language
   (EN/ID/ZH/MS), staged behind Save/Cancel.
 - **Basic auth** — single admin, bcrypt, signed JWT cookie.

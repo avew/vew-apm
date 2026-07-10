@@ -25,6 +25,8 @@ export const monitors = sqliteTable(
     authHeaderName: text("auth_header_name"),
     authHeaderValue: text("auth_header_value"),
     enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    // opt-in: show this monitor on the public /status page
+    public: integer("public", { mode: "boolean" }).notNull().default(false),
     nextCheckAt: ts("next_check_at"),
     lastStatus: text("last_status"),
     // Alert threshold overrides (null = inherit global alert_settings)
@@ -200,7 +202,16 @@ export const alertSettings = sqliteTable("alert_settings", {
   updatedAt: ts("updated_at"),
 });
 
+export const statusPage = sqliteTable("status_page", {
+  id: integer("id").primaryKey(),
+  // master switch: /status 404s until this is on
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(false),
+  title: text("title").notNull().default("Service Status"),
+  updatedAt: ts("updated_at"),
+});
+
 export type Monitor = typeof monitors.$inferSelect;
+export type StatusPage = typeof statusPage.$inferSelect;
 export type NewMonitor = typeof monitors.$inferInsert;
 export type Check = typeof checks.$inferSelect;
 export type NewCheck = typeof checks.$inferInsert;

@@ -15,6 +15,13 @@
       "when": 1783669511144,
       "tag": "0001_majestic_karen_page",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1783672028567,
+      "tag": "0002_handy_magik",
+      "breakpoints": true
     }
   ]
 }
