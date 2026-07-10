@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getDb, schema } from "@/lib/db/client";
 import { requireUser } from "@/lib/session";
+import { encryptSecret } from "@/lib/crypto";
 import { desc } from "drizzle-orm";
 
 const WebhookConfig = z.object({
@@ -60,7 +61,7 @@ export async function POST(req: Request) {
       name: parse.data.name,
       kind: parse.data.kind,
       enabled: parse.data.enabled,
-      config: parse.data.config as object,
+      config: encryptSecret(parse.data.config) as unknown as object,
     })
     .returning();
 

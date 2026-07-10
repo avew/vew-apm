@@ -4,6 +4,7 @@ import { sendWebhook } from "./notifiers/webhook";
 import { sendEmail, type EmailConfig } from "./notifiers/email";
 import { sendTelegram, type TelegramConfig } from "./notifiers/telegram";
 import { withRetry } from "./retry";
+import { decryptSecret } from "./crypto";
 import type { Monitor } from "@/lib/db/schema";
 import type { Severity, AlertKind } from "./rules";
 
@@ -79,7 +80,7 @@ export async function dispatch(ev: Event): Promise<void> {
 
   await Promise.allSettled(
     channels.map(async (c) => {
-      const cfg = c.config as Record<string, unknown>;
+      const cfg = decryptSecret<Record<string, unknown>>(c.config);
       const label = `${c.kind}#${c.id}`;
       const send = async () => {
         if (c.kind === "webhook") {
@@ -145,5 +146,5 @@ export async function sendTest(channelId: number): Promise<void> {
     .from(schema.notificationChannels)
     .where(eq(schema.notificationChannels.id, channelId));
   if (!c) throw new Error("channel not found");
-  await sendTestConfig(c.kind, c.config as Record<string, unknown>);
+  await sendTestConfig(c.kind, decryptSecret<Record<string, unknown>>(c.config));
 }

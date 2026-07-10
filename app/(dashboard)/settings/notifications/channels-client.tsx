@@ -1,15 +1,23 @@
 "use client";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { NotificationChannel } from "@/lib/db/schema";
 import { Send, Trash2, Plus, Bell } from "lucide-react";
 import { NotificationModal } from "./notification-modal";
 import { useT } from "@/lib/i18n-client";
 
+/** Secret-free channel shape sent to the client (no config/token/apiKey). */
+export type SafeChannel = {
+  id: number;
+  name: string;
+  kind: string;
+  enabled: boolean;
+  preview: string;
+};
+
 export function ChannelsClient({
   initial,
 }: {
-  initial: NotificationChannel[];
+  initial: SafeChannel[];
 }) {
   const [open, setOpen] = useState(false);
   const t = useT();
@@ -49,7 +57,7 @@ export function ChannelsClient({
   );
 }
 
-function ChannelRow({ channel }: { channel: NotificationChannel }) {
+function ChannelRow({ channel }: { channel: SafeChannel }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
@@ -62,7 +70,7 @@ function ChannelRow({ channel }: { channel: NotificationChannel }) {
           {!channel.enabled && <span className="badge badge-muted ml-1">disabled</span>}
         </div>
         <div className="text-xs text-[var(--muted)] font-mono truncate max-w-md mt-0.5">
-          {JSON.stringify(channel.config).slice(0, 120)}
+          {channel.preview}
         </div>
         {msg && <div className="text-xs text-emerald-600 mt-0.5">{msg}</div>}
       </div>

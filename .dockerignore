@@ -5,6 +5,7 @@ data
 *.db
 *.db-wal
 *.db-shm
+.secret_key
 .env
 .env.*
 !.env.example

@@ -38,6 +38,8 @@ yarn-error.log*
 /data
 *.db
 *.db-wal
+# encryption key for channel secrets at rest — never commit
+.secret_key
 *.db-shm
 
 # vercel

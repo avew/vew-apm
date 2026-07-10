@@ -38,7 +38,7 @@ Key files in `lib/`:
 
 ## Conventions
 - Design tokens + `.card`/`.btn-*`/`.badge`/`.field-input` in `app/globals.css`; use CSS vars (`var(--foreground)` etc.), not hardcoded colors. Theme is light/dark/auto via `data-theme`.
-- Secrets (Telegram bot token, Resend API key) live in `notification_channels.config` (jsonb), not env.
+- Secrets (Telegram bot token, Resend API key) live in `notification_channels.config` (jsonb), not env — and are **encrypted at rest** (`crypto.ts`, AES-256-GCM, `enc:v1:` prefix). Encrypt on write (both notifications API routes), `decryptSecret` on read (`notifier.ts` dispatch + `sendTest`; `notifications/page.tsx` decrypts only to build a secret-free row preview — never ship `config` to the client). `decryptSecret` passes plaintext through, so legacy rows still read; `instrumentation.ts` runs `encryptPlaintextChannels()` at boot (idempotent). Key: `ENCRYPTION_KEY` env or generated `<data-dir>/.secret_key` — never `SESSION_SECRET` (rotating it would orphan every secret).
 - API routes validate with `zod` and gate with `requireUser()` (except `/api/cron/*`).
 
 ## Gotchas
