@@ -68,9 +68,10 @@ export async function updateStatusPageSettings(patch: {
 export interface PublicIncident {
   label: string;
   severity: string;
-  startedAt: Date;
-  endedAt: Date | null;
   ongoing: boolean;
+  count: number;
+  // most recent occurrence in the group
+  startedAt: Date;
 }
 
 export interface PublicService {
@@ -79,6 +80,49 @@ export interface PublicService {
   state: PublicState;
   uptime: { day: number; week: number; month: number };
   incidents: PublicIncident[];
+  // incidents beyond the shown top 10 (for a "+N more" hint)
+  moreIncidents: number;
+}
+
+const MAX_INCIDENTS = 10;
+
+/**
+ * Collapse raw incidents into per-(label, ongoing) groups with a count, so the
+ * public list doesn't repeat "Component issue" ten times. Ongoing first, then
+ * most-recent; capped to the top MAX_INCIDENTS.
+ */
+export function groupIncidents(
+  raw: { label: string; severity: string; ongoing: boolean; startedAt: Date }[],
+): { shown: PublicIncident[]; more: number } {
+  const groups = new Map<string, PublicIncident>();
+  for (const i of raw) {
+    const key = `${i.label}|${i.ongoing}`;
+    const g = groups.get(key);
+    if (!g) {
+      groups.set(key, {
+        label: i.label,
+        severity: i.severity,
+        ongoing: i.ongoing,
+        count: 1,
+        startedAt: i.startedAt,
+      });
+    } else {
+      g.count++;
+      if (i.startedAt > g.startedAt) g.startedAt = i.startedAt;
+      if (i.severity === "critical") g.severity = "critical";
+    }
+  }
+  const sorted = [...groups.values()].sort((a, b) =>
+    a.ongoing === b.ongoing
+      ? b.startedAt.getTime() - a.startedAt.getTime()
+      : a.ongoing
+        ? -1
+        : 1,
+  );
+  return {
+    shown: sorted.slice(0, MAX_INCIDENTS),
+    more: Math.max(0, sorted.length - MAX_INCIDENTS),
+  };
 }
 
 export interface PublicStatus {
@@ -132,7 +176,6 @@ export async function getPublicStatus(now: Date): Promise<PublicStatus> {
             kind: schema.incidents.kind,
             severity: schema.incidents.severity,
             startedAt: schema.incidents.startedAt,
-            endedAt: schema.incidents.endedAt,
           })
           .from(schema.incidents)
           .where(
@@ -144,32 +187,31 @@ export async function getPublicStatus(now: Date): Promise<PublicStatus> {
             ),
           )
           .orderBy(desc(schema.incidents.startedAt))
-          .limit(5),
+          .limit(50),
       ]);
 
-      const incidents: PublicIncident[] = [
+      const { shown, more } = groupIncidents([
         ...open.map((i) => ({
           label: publicIncidentLabel(i.kind),
           severity: i.severity,
           startedAt: i.startedAt,
-          endedAt: null,
           ongoing: true,
         })),
         ...recent.map((i) => ({
           label: publicIncidentLabel(i.kind),
           severity: i.severity,
           startedAt: i.startedAt,
-          endedAt: i.endedAt,
           ongoing: false,
         })),
-      ];
+      ]);
 
       return {
         id: m.id,
         name: m.name,
         state: deriveState(m.lastStatus, open),
         uptime: { day: d.upPct, week: w.upPct, month: mth.upPct },
-        incidents,
+        incidents: shown,
+        moreIncidents: more,
       };
     }),
   );

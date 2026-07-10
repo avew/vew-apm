@@ -81,18 +81,28 @@ export default async function StatusPage() {
                     {s.incidents.map((inc, i) => (
                       <li key={i} className="flex items-center gap-2 text-xs">
                         <span
-                          className={`h-1.5 w-1.5 rounded-full ${
+                          className={`h-1.5 w-1.5 shrink-0 rounded-full ${
                             inc.severity === "critical" ? "bg-red-500" : "bg-amber-500"
                           }`}
                         />
-                        <span className="font-medium">{inc.label}</span>
+                        <span className="font-medium">
+                          {inc.label}
+                          {inc.count > 1 && (
+                            <span className="ml-1 text-[var(--muted)]">×{inc.count}</span>
+                          )}
+                        </span>
                         <span className="text-[var(--muted)]">
                           {inc.ongoing
-                            ? `ongoing · started ${formatDistanceToNowStrict(inc.startedAt)} ago`
+                            ? `ongoing · ${formatDistanceToNowStrict(inc.startedAt)}`
                             : `resolved · ${formatDistanceToNowStrict(inc.startedAt)} ago`}
                         </span>
                       </li>
                     ))}
+                    {s.moreIncidents > 0 && (
+                      <li className="text-xs text-[var(--muted)] pl-3.5">
+                        +{s.moreIncidents} more
+                      </li>
+                    )}
                   </ul>
                 )}
               </li>
