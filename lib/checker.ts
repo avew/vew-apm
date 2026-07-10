@@ -21,6 +21,51 @@ interface FetchResult {
   rawJson: unknown;
 }
 
+// Actuator health payloads are KBs; cap what we read so a misbehaving or
+// runaway endpoint can't stream an unbounded body into memory.
+export const MAX_BODY_BYTES = 2 * 1024 * 1024; // 2 MB
+
+/**
+ * Read a response body as text, bounded to MAX_BODY_BYTES. Rejects early via
+ * Content-Length when present, otherwise stops (and cancels) mid-stream once the
+ * cap is exceeded. Returns `{ tooLarge: true }` instead of the text if over cap.
+ */
+export async function readBodyCapped(
+  res: Response,
+): Promise<{ text: string | null; tooLarge: boolean }> {
+  const cl = Number(res.headers.get("content-length"));
+  if (Number.isFinite(cl) && cl > MAX_BODY_BYTES) {
+    return { text: null, tooLarge: true };
+  }
+  const reader = res.body?.getReader();
+  if (!reader) {
+    const t = await res.text().catch(() => "");
+    return t.length > MAX_BODY_BYTES
+      ? { text: null, tooLarge: true }
+      : { text: t, tooLarge: false };
+  }
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    total += value.byteLength;
+    if (total > MAX_BODY_BYTES) {
+      await reader.cancel().catch(() => {});
+      return { text: null, tooLarge: true };
+    }
+    chunks.push(value);
+  }
+  const buf = new Uint8Array(total);
+  let off = 0;
+  for (const c of chunks) {
+    buf.set(c, off);
+    off += c.byteLength;
+  }
+  return { text: new TextDecoder().decode(buf), tooLarge: false };
+}
+
 async function fetchHealth(monitor: Monitor): Promise<FetchResult> {
   const started = Date.now();
   const headers: Record<string, string> = { accept: "application/json" };
@@ -35,19 +80,26 @@ async function fetchHealth(monitor: Monitor): Promise<FetchResult> {
       cache: "no-store",
     });
     const responseMs = Date.now() - started;
+    const { text, tooLarge } = await readBodyCapped(res);
     let body: unknown = null;
-    try {
-      body = await res.json();
-    } catch {
-      body = null;
+    if (text !== null) {
+      try {
+        body = JSON.parse(text);
+      } catch {
+        body = null;
+      }
     }
-    if (!res.ok || !body) {
+    if (!res.ok || tooLarge || !body) {
       return {
         overall: "DOWN",
         parsed: null,
         responseMs,
         httpStatus: res.status,
-        errorText: !res.ok ? `HTTP ${res.status}` : "invalid json body",
+        errorText: !res.ok
+          ? `HTTP ${res.status}`
+          : tooLarge
+            ? `response too large (> ${MAX_BODY_BYTES} bytes)`
+            : "invalid json body",
         rawJson: body,
       };
     }
