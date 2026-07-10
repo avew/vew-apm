@@ -46,9 +46,10 @@ PORT=8080 docker compose up -d --build   # → http://localhost:8080
 ## 3. Verify
 
 ```bash
-docker compose ps
+docker compose ps               # STATUS should read "Up ... (healthy)" once warmed up
 docker compose logs -f          # look for: "[✓] Changes applied", "✓ Ready", "[scheduler] started"
-curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3000/setup   # 200
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3000/setup        # 200
+curl -s http://localhost:3000/api/health                                    # {"status":"ok",...}
 ```
 
 Add a monitor pointing at any reachable `/actuator/health`. To reach a service
@@ -115,6 +116,12 @@ docker compose start
   only (no drizzle-kit at runtime), tracked in a `_migrations` table.
 - **Checks**: the in-process scheduler ([lib/scheduler.ts](lib/scheduler.ts)) ticks
   every `APM_SCHEDULER_TICK_MS` (default 5000) — no cron/webhook needed.
+- **Health**: the image ships a `HEALTHCHECK` that polls
+  [`GET /api/health`](app/api/health/route.ts) (DB reachable + scheduler ticking).
+  `docker ps` shows `healthy`/`unhealthy`; Compose/orchestrators can gate on it and
+  auto-restart a stuck container. Returns `200` healthy, `503` degraded. If you run
+  checks externally (`APM_DISABLE_SCHEDULER=1`) the scheduler reports `disabled`
+  and does not fail health.
 - **Persistence**: everything is in the `apm-data` volume; the container is
   otherwise stateless.
 
