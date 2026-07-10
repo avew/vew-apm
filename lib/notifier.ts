@@ -19,6 +19,10 @@ export type Event =
       reason: string | null;
       metricValue: number | null;
       threshold: number | null;
+      // set on re-notifications of a still-open incident
+      repeat?: boolean;
+      // set when severity rose (warning → critical) since the last alert
+      escalated?: boolean;
     }
   | {
       kind: "resolved";
@@ -37,9 +41,14 @@ function renderText(ev: Event): { subject: string; body: string } {
   const scope = ev.componentPath ? `\`${ev.componentPath}\`` : "overall";
   const sev = ev.severity.toUpperCase();
   if (ev.kind === "down") {
+    const tag = ev.escalated ? "ESCALATED" : ev.repeat ? `STILL ${sev}` : sev;
+    const icon = ev.escalated ? "⏫" : ev.repeat ? "🔁" : "🔴";
+    const openedFor = ev.repeat
+      ? `\nOpen for: ${Math.round((Date.now() - ev.startedAt.getTime()) / 60000)}m`
+      : "";
     return {
-      subject: `[Vew APM][${sev}] ${ev.alertKind} — ${ev.monitor.name} (${scope})`,
-      body: `🔴 *${ev.monitor.name}* alert: *${ev.alertKind}* (${ev.severity})\nURL: ${ev.monitor.url}\nScope: ${scope}\n${ev.reason ? `Detail: ${ev.reason}\n` : ""}Started: ${ev.startedAt.toISOString()}`,
+      subject: `[Vew APM][${tag}] ${ev.alertKind} — ${ev.monitor.name} (${scope})`,
+      body: `${icon} *${ev.monitor.name}* alert: *${ev.alertKind}* (${ev.severity})\nURL: ${ev.monitor.url}\nScope: ${scope}\n${ev.reason ? `Detail: ${ev.reason}\n` : ""}Started: ${ev.startedAt.toISOString()}${openedFor}`,
     };
   }
   return {
@@ -74,6 +83,8 @@ export async function dispatch(ev: Event): Promise<void> {
       url: ev.monitor.url,
     },
     componentPath: ev.componentPath,
+    repeat: ev.kind === "down" ? ev.repeat ?? false : false,
+    escalated: ev.kind === "down" ? ev.escalated ?? false : false,
     startedAt: ev.startedAt.toISOString(),
     endedAt: ev.kind === "resolved" ? ev.endedAt.toISOString() : null,
   };

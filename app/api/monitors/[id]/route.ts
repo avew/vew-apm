@@ -22,6 +22,7 @@ const PatchBody = z.object({
   eurekaDropAlert: z.boolean().nullable().optional(),
   serviceGraceSeconds: z.number().int().min(0).max(86400).nullable().optional(),
   componentGraceSeconds: z.number().int().min(0).max(86400).nullable().optional(),
+  renotifyMinutes: z.number().int().min(0).max(10080).nullable().optional(),
 });
 
 async function getId(ctx: { params: Promise<{ id: string }> }) {

@@ -420,6 +420,8 @@ async function reconcileIncidents(
       startedAt: now,
       resolved: false,
       suppressed: muted,
+      lastNotifiedAt: muted ? undefined : now,
+      notifyCount: muted ? 0 : 1,
     });
     if (!muted) {
       await dispatch({
@@ -459,7 +461,18 @@ async function reconcileIncidents(
         });
       }
     } else {
-      // refresh live metric/reason/severity without re-notifying
+      // Incident persists. Refresh live metric/reason/severity, and re-notify if
+      // it escalated (warning → critical) or the renotify cadence elapsed for a
+      // still-open critical. Suppressed (maintenance) incidents never re-notify.
+      const escalated =
+        row.severity !== "critical" && still.severity === "critical";
+      const renotifyMs = thresholds.renotifyMinutes * 60_000;
+      const dueRenotify =
+        thresholds.renotifyMinutes > 0 &&
+        still.severity === "critical" &&
+        row.lastNotifiedAt != null &&
+        now.getTime() - row.lastNotifiedAt.getTime() >= renotifyMs;
+      const notify = !row.suppressed && (escalated || dueRenotify);
       await db
         .update(schema.incidents)
         .set({
@@ -467,8 +480,26 @@ async function reconcileIncidents(
           threshold: still.threshold ?? undefined,
           reason: still.reason,
           severity: still.severity,
+          ...(notify
+            ? { lastNotifiedAt: now, notifyCount: row.notifyCount + 1 }
+            : {}),
         })
         .where(eq(schema.incidents.id, row.id));
+      if (notify) {
+        await dispatch({
+          kind: "down",
+          monitor,
+          componentPath: row.componentPath,
+          startedAt: row.startedAt,
+          severity: still.severity,
+          alertKind: still.kind,
+          reason: still.reason,
+          metricValue: still.metricValue,
+          threshold: still.threshold,
+          repeat: !escalated,
+          escalated,
+        });
+      }
     }
   }
 }

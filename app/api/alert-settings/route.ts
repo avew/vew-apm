@@ -12,6 +12,7 @@ const Body = z.object({
   eurekaDropAlert: z.boolean().optional(),
   serviceGraceSeconds: z.number().int().min(0).max(86400).optional(),
   componentGraceSeconds: z.number().int().min(0).max(86400).optional(),
+  renotifyMinutes: z.number().int().min(0).max(10080).optional(),
   retentionDays: z.number().int().min(0).max(3650).optional(),
 });
 

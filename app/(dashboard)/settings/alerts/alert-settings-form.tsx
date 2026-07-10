@@ -11,6 +11,7 @@ interface Values {
   eurekaDropAlert: boolean;
   serviceGraceSeconds: number;
   componentGraceSeconds: number;
+  renotifyMinutes: number;
   retentionDays: number;
 }
 
@@ -117,6 +118,18 @@ export function AlertSettingsForm({ initial }: { initial: Values }) {
           <span className="text-xs text-[var(--muted)]">
             Absorbs Eureka eviction lag / transient restarts. 0 = alert on the
             first missed check.
+          </span>
+        </label>
+      </fieldset>
+
+      <fieldset className="space-y-3">
+        <legend className="text-sm font-medium mb-1">Renotify</legend>
+        <label className="block text-sm">
+          <span>Re-send a still-open critical alert every (minutes)</span>
+          <input className={cls} type="number" min={0} max={10080} value={v.renotifyMinutes} onChange={num("renotifyMinutes")} />
+          <span className="text-xs text-[var(--muted)]">
+            Reminders keep firing until the incident resolves. A warning that
+            escalates to critical re-alerts immediately. 0 = notify once only.
           </span>
         </label>
       </fieldset>

@@ -11,6 +11,7 @@ interface Overrides {
   eurekaDropAlert: boolean | null;
   serviceGraceSeconds: number | null;
   componentGraceSeconds: number | null;
+  renotifyMinutes: number | null;
 }
 
 interface Globals {
@@ -22,6 +23,7 @@ interface Globals {
   eurekaDropAlert: boolean;
   serviceGraceSeconds: number;
   componentGraceSeconds: number;
+  renotifyMinutes: number;
 }
 
 const cls = "field-input";
@@ -45,6 +47,7 @@ export function OverrideForm({
   const [latencyWindow, setWin] = useState(toStr(current.latencyWindow));
   const [serviceGrace, setGrace] = useState(toStr(current.serviceGraceSeconds));
   const [componentGrace, setCompGrace] = useState(toStr(current.componentGraceSeconds));
+  const [renotify, setRenotify] = useState(toStr(current.renotifyMinutes));
   const [eureka, setEureka] = useState<string>(
     current.eurekaDropAlert == null ? "" : current.eurekaDropAlert ? "on" : "off",
   );
@@ -78,6 +81,7 @@ export function OverrideForm({
               latencyWindow: numOrNull(latencyWindow),
               serviceGraceSeconds: numOrNull(serviceGrace),
               componentGraceSeconds: numOrNull(componentGrace),
+              renotifyMinutes: numOrNull(renotify),
               eurekaDropAlert:
                 eureka === "" ? null : eureka === "on" ? true : false,
             }),
@@ -139,6 +143,12 @@ export function OverrideForm({
           <input className={cls} type="number" min={0} value={componentGrace}
             placeholder={`inherit · ${globals.componentGraceSeconds}`}
             onChange={(e) => setCompGrace(e.target.value)} />
+        </label>
+        <label className="block text-sm">
+          <span>Renotify (min)</span>
+          <input className={cls} type="number" min={0} value={renotify}
+            placeholder={`inherit · ${globals.renotifyMinutes}`}
+            onChange={(e) => setRenotify(e.target.value)} />
         </label>
         <label className="block text-sm">
           <span>Service down alert</span>

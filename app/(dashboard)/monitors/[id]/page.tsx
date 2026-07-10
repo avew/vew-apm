@@ -250,6 +250,7 @@ export default async function MonitorDetail({
                 eurekaDropAlert: monitor.eurekaDropAlert,
                 serviceGraceSeconds: monitor.serviceGraceSeconds,
                 componentGraceSeconds: monitor.componentGraceSeconds,
+                renotifyMinutes: monitor.renotifyMinutes,
               },
               globals: {
                 diskWarnPct: alertGlobals.diskWarnPct,
@@ -260,6 +261,7 @@ export default async function MonitorDetail({
                 eurekaDropAlert: alertGlobals.eurekaDropAlert,
                 serviceGraceSeconds: alertGlobals.serviceGraceSeconds,
                 componentGraceSeconds: alertGlobals.componentGraceSeconds,
+                renotifyMinutes: alertGlobals.renotifyMinutes,
               },
             }}
           />
