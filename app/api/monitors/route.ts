@@ -22,6 +22,7 @@ const CreateBody = z.object({
   eurekaDropAlert: z.boolean().nullish(),
   serviceGraceSeconds: z.number().int().min(0).max(86400).nullish(),
   componentGraceSeconds: z.number().int().min(0).max(86400).nullish(),
+  renotifyMinutes: z.number().int().min(0).max(10080).nullish(),
 });
 
 export async function GET() {
@@ -64,6 +65,7 @@ export async function POST(req: Request) {
       eurekaDropAlert: m.eurekaDropAlert ?? null,
       serviceGraceSeconds: m.serviceGraceSeconds ?? null,
       componentGraceSeconds: m.componentGraceSeconds ?? null,
+      renotifyMinutes: m.renotifyMinutes ?? null,
     })
     .returning();
   return NextResponse.json({ monitor: row }, { status: 201 });

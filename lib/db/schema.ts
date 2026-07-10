@@ -36,6 +36,7 @@ export const monitors = sqliteTable(
     eurekaDropAlert: integer("eureka_drop_alert", { mode: "boolean" }),
     serviceGraceSeconds: integer("service_grace_seconds"),
     componentGraceSeconds: integer("component_grace_seconds"),
+    renotifyMinutes: integer("renotify_minutes"),
     createdAt: ts("created_at"),
     updatedAt: ts("updated_at"),
   },
@@ -120,6 +121,10 @@ export const incidents = sqliteTable(
     endedAt: integer("ended_at", { mode: "timestamp" }),
     resolved: integer("resolved", { mode: "boolean" }).notNull().default(false),
     suppressed: integer("suppressed", { mode: "boolean" }).notNull().default(false),
+    // Renotify bookkeeping: when the last alert for this incident was sent, and
+    // how many alerts fired (open + reminders + escalations).
+    lastNotifiedAt: integer("last_notified_at", { mode: "timestamp" }),
+    notifyCount: integer("notify_count").notNull().default(0),
   },
   (t) => [index("incidents_monitor_open_idx").on(t.monitorId, t.resolved)],
 );
@@ -188,6 +193,8 @@ export const alertSettings = sqliteTable("alert_settings", {
     .default(true),
   serviceGraceSeconds: integer("service_grace_seconds").notNull().default(30),
   componentGraceSeconds: integer("component_grace_seconds").notNull().default(60),
+  // re-send an alert for a still-open critical incident every N minutes; 0 = off
+  renotifyMinutes: integer("renotify_minutes").notNull().default(30),
   // days of check history to keep; 0 = keep forever
   retentionDays: integer("retention_days").notNull().default(30),
   updatedAt: ts("updated_at"),

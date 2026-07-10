@@ -254,3 +254,96 @@ describe("runCheck integration", () => {
     expect(checks[0].muted).toBe(true);
   });
 });
+
+describe("renotify + escalation", () => {
+  it("re-notifies a still-open critical incident once the cadence elapses", async () => {
+    const m = await createMonitor({ renotifyMinutes: 5 });
+    healthBody = { status: "UP", components: { redis: { status: "DOWN" } } };
+    await runCheck(m); // open → notify #1
+
+    let incs = await incidentsFor(m.id);
+    expect(incs).toHaveLength(1);
+    expect(incs[0].notifyCount).toBe(1);
+
+    // Backdate the last notification beyond the 5-minute cadence.
+    await getDb()
+      .update(schema.incidents)
+      .set({ lastNotifiedAt: new Date(Date.now() - 6 * 60_000) })
+      .where(eq(schema.incidents.id, incs[0].id));
+    webhookCalls = [];
+
+    await runCheck(m); // still DOWN → renotify
+    incs = await incidentsFor(m.id);
+    expect(incs[0].notifyCount).toBe(2);
+    expect(webhookCalls).toHaveLength(1);
+    expect(webhookCalls[0]).toMatchObject({
+      kind: "down",
+      repeat: true,
+      escalated: false,
+    });
+  });
+
+  it("does not re-notify before the cadence elapses", async () => {
+    const m = await createMonitor({ renotifyMinutes: 30 });
+    healthBody = { status: "UP", components: { redis: { status: "DOWN" } } };
+    await runCheck(m); // open, lastNotifiedAt ~ now
+    webhookCalls = [];
+
+    await runCheck(m); // still DOWN, cadence not elapsed
+    const incs = await incidentsFor(m.id);
+    expect(incs[0].notifyCount).toBe(1);
+    expect(webhookCalls).toHaveLength(0);
+  });
+
+  it("re-alerts immediately when a warning escalates to critical", async () => {
+    const m = await createMonitor({ renotifyMinutes: 0 }); // renotify off; escalation still fires
+    healthBody = {
+      status: "UP",
+      components: { redis: { status: "OUT_OF_SERVICE" } },
+    };
+    await runCheck(m); // open as warning
+    let incs = await incidentsFor(m.id);
+    expect(incs[0].severity).toBe("warning");
+    webhookCalls = [];
+
+    healthBody = { status: "UP", components: { redis: { status: "DOWN" } } };
+    await runCheck(m); // escalate → critical
+    incs = await incidentsFor(m.id);
+    expect(incs[0].severity).toBe("critical");
+    expect(incs[0].notifyCount).toBe(2);
+    expect(webhookCalls).toHaveLength(1);
+    expect(webhookCalls[0]).toMatchObject({
+      kind: "down",
+      escalated: true,
+      severity: "critical",
+    });
+  });
+
+  it("never re-notifies a suppressed (maintenance) incident", async () => {
+    const m = await createMonitor({ renotifyMinutes: 5 });
+    await getDb()
+      .insert(schema.maintenanceWindows)
+      .values({
+        name: "mw",
+        scope: "monitor",
+        monitorId: m.id,
+        startsAt: new Date(Date.now() - 60_000),
+        endsAt: new Date(Date.now() + 3_600_000),
+        recurrence: "none",
+      });
+    healthBody = { status: "UP", components: { redis: { status: "DOWN" } } };
+    await runCheck(m); // open suppressed, no notify
+
+    let incs = await incidentsFor(m.id);
+    expect(incs[0].suppressed).toBe(true);
+    await getDb()
+      .update(schema.incidents)
+      .set({ lastNotifiedAt: new Date(Date.now() - 10 * 60_000) }) // overdue
+      .where(eq(schema.incidents.id, incs[0].id));
+    webhookCalls = [];
+
+    await runCheck(m);
+    incs = await incidentsFor(m.id);
+    expect(webhookCalls).toHaveLength(0);
+  });
+});

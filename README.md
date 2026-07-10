@@ -32,7 +32,9 @@ disk usage as a time series, and can't track Eureka registry membership.
 - **Incidents** — global page + per-monitor log, ongoing count badge, auto-resolve.
 - **Notifications** — global channels (webhook / email via Resend / Telegram);
   every enabled channel fires for all monitors. Per-channel config (incl. Resend
-  API key); no env var needed.
+  API key); no env var needed. Delivery retries with backoff; a still-open
+  critical incident re-notifies every `renotifyMinutes` and escalates
+  warning → critical.
 - **Maintenance windows** — global or per-monitor, one-off or recurring, with
   timezone selector; suppress alerts without affecting uptime %.
 - **Appearance** — light/dark/auto theme, heartbeat-bar style, language
