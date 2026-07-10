@@ -155,11 +155,15 @@ troubleshooting: **[DOCKER.md](DOCKER.md)**.
 | `DATABASE_URL` | yes | SQLite path (default `./data/apm.db`; Compose sets `/data/apm.db`) |
 | `SESSION_SECRET` | dev only | ≥ 32 chars, signs the session cookie. **Auto-generated under Docker.** |
 | `CRON_SECRET` | optional | protects `/api/cron/tick`. **Auto-generated under Docker.** |
+| `ENCRYPTION_KEY` | optional | encrypts channel secrets at rest. If unset, a random key is generated once at `<data-dir>/.secret_key`. Don't reuse `SESSION_SECRET`. |
 | `APP_BASE_URL` | no | used in notification links |
 
 Running locally (`npm run dev`) you must set `SESSION_SECRET` yourself; under
-Docker it (and `CRON_SECRET`) are generated on first start. Resend API keys are
-stored **per email channel** in the UI — not in env.
+Docker it (and `CRON_SECRET`) are generated on first start. Resend API keys and
+Telegram tokens are stored **per channel** in the UI — not in env — and
+**encrypted at rest** (AES-256-GCM) so a leaked `apm.db` doesn't spill them.
+Keep the `.secret_key` file (or `ENCRYPTION_KEY`) — without it, stored secrets
+can't be decrypted.
 
 ## Project layout
 

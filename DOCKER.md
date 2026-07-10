@@ -132,6 +132,13 @@ docker compose start
 
 - **Secrets**: `.env` and `data/` are gitignored and excluded from the image via
   `.dockerignore` — they never bake into a layer.
+- **Channel secrets at rest**: Telegram tokens / Resend keys are AES-256-GCM
+  encrypted in the DB. The key is `ENCRYPTION_KEY` (if you set it) or a random
+  `/data/.secret_key` generated on first start and kept on the volume. It lives
+  on the same volume as the DB (so a whole-volume compromise still exposes both)
+  — the protection is against a leaked **DB-only** copy. **Back it up with the
+  DB**, or pin `ENCRYPTION_KEY`: without the key, stored secrets can't be
+  decrypted and channels must be re-entered.
 - **Rotating secrets**: delete `/data/.session_secret` (invalidates all sessions)
   and restart — a new one is generated. Or set `SESSION_SECRET` explicitly.
 - **Reverse proxy / TLS**: put Nginx/Caddy/Traefik in front and set `APP_BASE_URL`

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getDb, schema } from "@/lib/db/client";
 import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/session";
+import { encryptSecret } from "@/lib/crypto";
 
 const Patch = z.object({
   name: z.string().min(1).optional(),
@@ -22,7 +23,7 @@ export async function PATCH(
   }
   const db = getDb();
   const payload: Record<string, unknown> = { ...parse.data };
-  if (payload.config) payload.config = payload.config as object;
+  if (payload.config) payload.config = encryptSecret(payload.config);
   await db
     .update(schema.notificationChannels)
     .set(payload as Partial<typeof schema.notificationChannels.$inferInsert>)
