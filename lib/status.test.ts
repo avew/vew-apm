@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { deriveState, overallState, publicIncidentLabel } from "./status";
+import {
+  deriveState,
+  overallState,
+  publicIncidentLabel,
+  groupIncidents,
+} from "./status";
+
+const at = (min: number) => new Date(2026, 0, 1, 12, min); // deterministic times
 
 describe("deriveState", () => {
   it("is down on an open critical incident", () => {
@@ -39,5 +46,48 @@ describe("publicIncidentLabel", () => {
   });
   it("falls back for unknown kinds (never leaks the raw kind)", () => {
     expect(publicIncidentLabel("something_internal")).toBe("Service issue");
+  });
+});
+
+describe("groupIncidents", () => {
+  it("collapses same-label incidents into one row with a count", () => {
+    const { shown } = groupIncidents([
+      { label: "Dependency missing", severity: "warning", ongoing: false, startedAt: at(1) },
+      { label: "Dependency missing", severity: "warning", ongoing: false, startedAt: at(3) },
+      { label: "Dependency missing", severity: "warning", ongoing: false, startedAt: at(2) },
+    ]);
+    expect(shown).toHaveLength(1);
+    expect(shown[0].count).toBe(3);
+    expect(shown[0].startedAt).toEqual(at(3)); // most recent kept
+  });
+
+  it("keeps ongoing and resolved of the same label as separate groups, ongoing first", () => {
+    const { shown } = groupIncidents([
+      { label: "Storage pressure", severity: "warning", ongoing: false, startedAt: at(5) },
+      { label: "Storage pressure", severity: "warning", ongoing: true, startedAt: at(1) },
+    ]);
+    expect(shown).toHaveLength(2);
+    expect(shown[0].ongoing).toBe(true);
+    expect(shown[1].ongoing).toBe(false);
+  });
+
+  it("escalates the group severity to critical if any member is critical", () => {
+    const { shown } = groupIncidents([
+      { label: "Component issue", severity: "warning", ongoing: true, startedAt: at(1) },
+      { label: "Component issue", severity: "critical", ongoing: true, startedAt: at(2) },
+    ]);
+    expect(shown[0].severity).toBe("critical");
+  });
+
+  it("caps at 10 groups and reports the remainder", () => {
+    const raw = Array.from({ length: 14 }, (_, i) => ({
+      label: `Issue ${i}`,
+      severity: "warning",
+      ongoing: false,
+      startedAt: at(i),
+    }));
+    const { shown, more } = groupIncidents(raw);
+    expect(shown).toHaveLength(10);
+    expect(more).toBe(4);
   });
 });
