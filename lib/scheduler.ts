@@ -1,5 +1,6 @@
 import { runDueChecks } from "./checker";
 import { pruneUsingSettings } from "./retention";
+import { guardOverlap } from "./overlap-guard";
 
 // Next compiles instrumentation and route handlers into separate module graphs,
 // so a plain module-level `let` would be instantiated once per bundle and the
@@ -36,7 +37,7 @@ export function startScheduler() {
   const PRUNE_EVERY_MS = 60 * 60 * 1000; // hourly
   let lastPrune = 0;
 
-  const tick = async () => {
+  const tickBody = async () => {
     try {
       try {
         const { ran } = await runDueChecks();
@@ -60,6 +61,12 @@ export function startScheduler() {
       state().lastTickAt = Date.now();
     }
   };
+
+  // Skip a tick if the previous one is still running, so a slow tick (e.g. a
+  // monitor fetch near its timeout) can't overlap and double-run a due monitor.
+  const tick = guardOverlap(tickBody, () =>
+    console.warn("[scheduler] previous tick still running — skipping this one"),
+  );
 
   setTimeout(tick, 500);
   setInterval(tick, tickMs);
