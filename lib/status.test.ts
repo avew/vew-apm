@@ -5,6 +5,7 @@ import {
   publicIncidentLabel,
   groupIncidents,
   segState,
+  parseWindow,
 } from "./status";
 
 const at = (min: number) => new Date(2026, 0, 1, 12, min); // deterministic times
@@ -98,6 +99,18 @@ describe("groupIncidents", () => {
       { serviceName: "etax", label: "Storage pressure", severity: "warning", ongoing: false, startedAt: at(2) },
     ]);
     expect(shown).toHaveLength(2);
+  });
+});
+
+describe("parseWindow", () => {
+  it("accepts the three valid windows", () => {
+    expect(parseWindow("24h")).toBe("24h");
+    expect(parseWindow("7d")).toBe("7d");
+    expect(parseWindow("90d")).toBe("90d");
+  });
+  it("defaults to 90d for missing/garbage input", () => {
+    expect(parseWindow(undefined)).toBe("90d");
+    expect(parseWindow("lol")).toBe("90d");
   });
 });
 
