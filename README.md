@@ -170,6 +170,12 @@ scripts/           seed, seed-incidents, mock-service, demo-service-down
 
 Data model lives in [lib/db/schema.ts](lib/db/schema.ts).
 
+## Contributing
+
+`main` is protected — changes land via pull request with green CI. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for the branch → PR → merge flow and the
+checks to run locally first.
+
 ---
 
 Crafted with ♥ in Bandung by [avew](https://saweria.co/asepthon) · 2026
