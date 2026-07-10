@@ -1,6 +1,7 @@
 "use client";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Copy, ExternalLink } from "lucide-react";
 
 interface Values {
   enabled: boolean;
@@ -12,6 +13,14 @@ export function StatusPageForm({ initial }: { initial: Values }) {
   const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [pending, start] = useTransition();
   const router = useRouter();
+
+  // Absolute public URL — origin is only known client-side.
+  const [origin, setOrigin] = useState("");
+  const [copied, setCopied] = useState(false);
+  // window is client-only; read the origin after mount.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => setOrigin(window.location.origin), []);
+  const publicUrl = `${origin}/status`;
 
   return (
     <form
@@ -65,6 +74,40 @@ export function StatusPageForm({ initial }: { initial: Values }) {
           placeholder="Service Status"
         />
       </label>
+
+      <div className="rounded-lg border border-[var(--border)] p-3">
+        <div className="text-xs font-medium text-[var(--muted)] mb-1.5">
+          Public URL {v.enabled ? "" : "(live once published)"}
+        </div>
+        <div className="flex items-center gap-2">
+          <code className="flex-1 truncate rounded bg-black/[0.04] dark:bg-white/[0.06] px-2 py-1.5 text-sm">
+            {publicUrl}
+          </code>
+          <button
+            type="button"
+            title="Copy"
+            onClick={() => {
+              navigator.clipboard?.writeText(publicUrl);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1500);
+            }}
+            className="btn btn-ghost !px-2 !py-1.5 text-xs"
+          >
+            <Copy className="w-3.5 h-3.5" /> {copied ? "Copied" : "Copy"}
+          </button>
+          <a
+            href="/status"
+            target="_blank"
+            rel="noreferrer"
+            className="btn btn-ghost !px-2 !py-1.5 text-xs"
+          >
+            <ExternalLink className="w-3.5 h-3.5" /> Open
+          </a>
+        </div>
+        <p className="text-xs text-[var(--muted)] mt-2">
+          Share this link. Only monitors with “Public” on appear here.
+        </p>
+      </div>
 
       {msg && (
         <p className={msg.type === "ok" ? "text-sm text-emerald-600" : "text-sm text-red-600"}>
