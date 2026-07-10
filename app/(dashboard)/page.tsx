@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getDb, schema } from "@/lib/db/client";
 import { desc, eq, and, sql, gte } from "drizzle-orm";
 import { listActiveWindows } from "@/lib/maintenance";
+import { groupByName } from "@/lib/grouping";
 import { getT } from "@/lib/i18n-server";
 import { Plus, Wrench } from "lucide-react";
 import { AutoRefresh } from "./auto-refresh";
@@ -108,6 +109,9 @@ export default async function Home() {
       return { monitor: m, checks, uptime, disk, alerts };
     }),
   );
+
+  const monitorGroups = groupByName(cards, (c) => c.monitor.group);
+  const showGroupHeaders = monitorGroups.length > 1;
 
   const t = await getT();
   const upCount = monitors.filter((m) => m.lastStatus === "UP").length;
@@ -219,8 +223,15 @@ export default async function Home() {
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {cards.map(({ monitor, checks, uptime, disk, alerts }) => {
+      {monitorGroups.map((grp, gi) => (
+        <section key={grp.name ?? "_ungrouped"} className={gi > 0 ? "mt-8" : ""}>
+          {showGroupHeaders && (
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+              {grp.name ?? "Ungrouped"}
+            </h2>
+          )}
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {grp.items.map(({ monitor, checks, uptime, disk, alerts }) => {
           const muted = globalMute || mutedMonitorIds.has(monitor.id);
           const status = monitor.lastStatus ?? "UNKNOWN";
           const level =
@@ -342,8 +353,10 @@ export default async function Home() {
               </div>
             </Link>
           );
-        })}
-      </div>
+            })}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }

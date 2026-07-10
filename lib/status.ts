@@ -154,6 +154,7 @@ export function groupIncidents(
 export interface PublicService {
   id: number;
   name: string;
+  group: string | null;
   state: PublicState;
   uptimePct: number;
   history: DaySeg[];
@@ -227,6 +228,7 @@ export async function getPublicStatus(
     .select({
       id: schema.monitors.id,
       name: schema.monitors.name,
+      group: schema.monitors.group,
       lastStatus: schema.monitors.lastStatus,
     })
     .from(schema.monitors)
@@ -305,6 +307,7 @@ export async function getPublicStatus(
       return {
         id: m.id,
         name: m.name,
+        group: m.group,
         state: deriveState(m.lastStatus, open),
         uptimePct: up.upPct,
         history: hist,

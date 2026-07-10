@@ -8,6 +8,7 @@ import {
   type DaySeg,
   type PublicIncident,
 } from "@/lib/status";
+import { groupByName } from "@/lib/grouping";
 
 export const dynamic = "force-dynamic";
 
@@ -98,6 +99,8 @@ export default async function StatusPage({
   const banner = STATE_META[status.overall];
   const incidentRows = withHeaders(status.incidents);
   const wcfg = STATUS_WINDOWS.find((w) => w.key === status.window)!;
+  const serviceGroups = groupByName(status.services, (s) => s.group);
+  const showGroupHeaders = serviceGroups.length > 1;
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-10 sm:py-16">
@@ -138,11 +141,19 @@ export default async function StatusPage({
           No services are currently published.
         </p>
       ) : (
-        <ul className="space-y-4">
-          {status.services.map((s) => {
-            const m = STATE_META[s.state];
-            return (
-              <li key={s.id} className="rounded-xl border border-[var(--border)] p-4">
+        <div className="space-y-6">
+          {serviceGroups.map((grp) => (
+            <section key={grp.name ?? "_ungrouped"}>
+              {showGroupHeaders && (
+                <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                  {grp.name ?? "Other"}
+                </h2>
+              )}
+              <ul className="space-y-4">
+                {grp.items.map((s) => {
+                  const m = STATE_META[s.state];
+                  return (
+                    <li key={s.id} className="rounded-xl border border-[var(--border)] p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2.5 min-w-0">
                     <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${m.dot}`} />
@@ -158,10 +169,13 @@ export default async function StatusPage({
                   <span>{pct(s.uptimePct)} uptime</span>
                   <span>{status.window === "24h" ? "Now" : "Today"}</span>
                 </div>
-              </li>
-            );
-          })}
-        </ul>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ))}
+        </div>
       )}
 
       {status.incidents.length > 0 && (

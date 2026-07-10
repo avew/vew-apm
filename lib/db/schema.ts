@@ -27,6 +27,9 @@ export const monitors = sqliteTable(
     enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
     // opt-in: show this monitor on the public /status page
     public: integer("public", { mode: "boolean" }).notNull().default(false),
+    // optional grouping label for the dashboard + status page ("group" is a
+    // SQL reserved word, so the column is group_name)
+    group: text("group_name"),
     nextCheckAt: ts("next_check_at"),
     lastStatus: text("last_status"),
     // Alert threshold overrides (null = inherit global alert_settings)

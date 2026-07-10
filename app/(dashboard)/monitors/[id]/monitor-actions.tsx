@@ -21,6 +21,7 @@ export function MonitorActions({
   name,
   url,
   intervalSeconds,
+  group,
   thresholds,
 }: {
   id: number;
@@ -28,6 +29,7 @@ export function MonitorActions({
   name: string;
   url: string;
   intervalSeconds: number;
+  group: string | null;
   thresholds: ThresholdProps;
 }) {
   const router = useRouter();
@@ -124,6 +126,7 @@ export function MonitorActions({
           name={name}
           url={url}
           intervalSeconds={intervalSeconds}
+          group={group}
           onClose={() => setEditing(false)}
         />
       )}
@@ -187,12 +190,14 @@ function EditModal({
   name,
   url,
   intervalSeconds,
+  group,
   onClose,
 }: {
   id: number;
   name: string;
   url: string;
   intervalSeconds: number;
+  group: string | null;
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -200,6 +205,7 @@ function EditModal({
   const [n, setN] = useState(name);
   const [u, setU] = useState(url);
   const [iv, setIv] = useState(intervalSeconds);
+  const [g, setG] = useState(group ?? "");
   const [error, setError] = useState<string | null>(null);
 
   return (
@@ -224,6 +230,7 @@ function EditModal({
                 name: n.trim(),
                 url: u.trim(),
                 intervalSeconds: iv,
+                group: g.trim() || null,
               }),
             });
             if (!res.ok) {
@@ -262,6 +269,15 @@ function EditModal({
             min={10}
             value={iv}
             onChange={(e) => setIv(Number(e.target.value))}
+          />
+        </label>
+        <label className="block text-sm">
+          <span className="font-medium">Group</span>
+          <input
+            className="field-input !mt-1"
+            value={g}
+            onChange={(e) => setG(e.target.value)}
+            placeholder="none — e.g. core, billing"
           />
         </label>
         {error && <p className="text-sm text-red-600">{error}</p>}

@@ -14,6 +14,7 @@ const PatchBody = z.object({
   authHeaderValue: z.string().max(2000).nullable().optional(),
   enabled: z.boolean().optional(),
   public: z.boolean().optional(),
+  group: z.string().max(80).nullable().optional(),
   // Alert threshold overrides (null = clear override → inherit global)
   diskWarnPct: z.number().min(1).max(100).nullable().optional(),
   diskCritPct: z.number().min(1).max(100).nullable().optional(),

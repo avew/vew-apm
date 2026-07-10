@@ -13,6 +13,7 @@ const CreateBody = z.object({
   authHeaderName: z.string().max(120).optional(),
   authHeaderValue: z.string().max(2000).optional(),
   enabled: z.boolean().default(true),
+  group: z.string().max(80).nullish(),
   // Alert threshold overrides (null/omit = inherit global)
   diskWarnPct: z.number().min(1).max(100).nullish(),
   diskCritPct: z.number().min(1).max(100).nullish(),
@@ -57,6 +58,7 @@ export async function POST(req: Request) {
       authHeaderName: m.authHeaderName ?? null,
       authHeaderValue: m.authHeaderValue ?? null,
       enabled: m.enabled,
+      group: m.group?.trim() || null,
       diskWarnPct: m.diskWarnPct ?? null,
       diskCritPct: m.diskCritPct ?? null,
       downForMinutes: m.downForMinutes ?? null,

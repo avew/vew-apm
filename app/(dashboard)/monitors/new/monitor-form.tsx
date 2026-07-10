@@ -9,6 +9,7 @@ export function MonitorForm() {
   const [timeoutMs, setTimeoutMs] = useState(10000);
   const [authHeaderName, setAuthName] = useState("");
   const [authHeaderValue, setAuthValue] = useState("");
+  const [group, setGroup] = useState("");
   const [showOverrides, setShowOverrides] = useState(false);
   const [ov, setOv] = useState({
     diskWarnPct: "",
@@ -37,6 +38,7 @@ export function MonitorForm() {
             timeoutMs,
             authHeaderName: authHeaderName || undefined,
             authHeaderValue: authHeaderValue || undefined,
+            group: group.trim() || undefined,
             diskWarnPct: ovNum(ov.diskWarnPct),
             diskCritPct: ovNum(ov.diskCritPct),
             downForMinutes: ovNum(ov.downForMinutes),
@@ -96,6 +98,14 @@ export function MonitorForm() {
           />
         </Field>
       </div>
+      <Field label="Group (optional)">
+        <input
+          className="field-input"
+          value={group}
+          onChange={(e) => setGroup(e.target.value)}
+          placeholder="e.g. core, billing"
+        />
+      </Field>
       <div className="grid grid-cols-2 gap-4">
         <Field label="Auth header name (optional)">
           <input
