@@ -9,6 +9,7 @@ const PUBLIC_PATHS = [
   "/api/cron",
   "/api/fixture",
   "/api/health",
+  "/status",
 ];
 
 function isPublic(pathname: string): boolean {

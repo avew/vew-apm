@@ -9,6 +9,7 @@ import { getT } from "@/lib/i18n-server";
 import { ResponseTimeChart } from "./response-chart";
 import { DiskChart } from "./disk-chart";
 import { MonitorActions } from "./monitor-actions";
+import { PublicToggle } from "./public-toggle";
 import { ComponentTree } from "./component-tree";
 import { HealthProbes } from "./health-probes";
 import { ServiceRegistry } from "./service-registry";
@@ -222,6 +223,7 @@ export default async function MonitorDetail({
               <span className={`badge ${statusBadge}`}>{status}</span>
               {!monitor.enabled && <span className="badge badge-muted">paused</span>}
               {muted && <span className="badge badge-warn">maintenance</span>}
+              {monitor.public && <span className="badge badge-muted">public</span>}
             </div>
             <div className="text-sm text-[var(--muted)] mt-1 break-all font-mono">
               {monitor.url}
@@ -232,7 +234,7 @@ export default async function MonitorDetail({
           </div>
           <AutoRefresh />
         </div>
-        <div className="mt-3">
+        <div className="mt-3 flex items-center gap-2 flex-wrap">
           <MonitorActions
             id={monitor.id}
             enabled={monitor.enabled}
@@ -265,6 +267,7 @@ export default async function MonitorDetail({
               },
             }}
           />
+          <PublicToggle monitorId={monitor.id} initial={monitor.public} />
         </div>
       </div>
 
