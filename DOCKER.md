@@ -142,6 +142,13 @@ docker compose start
 - **Rotating secrets**: delete `/data/.session_secret` (invalidates all sessions)
   and restart — a new one is generated. Or set `SESSION_SECRET` explicitly.
 - **Reverse proxy / TLS**: put Nginx/Caddy/Traefik in front and set `APP_BASE_URL`
-  to the public URL. The app speaks plain HTTP on port 3000.
+  to the public URL. The app speaks plain HTTP on port 3000. Make the proxy pass
+  `X-Forwarded-Proto: https` so the session cookie is marked `Secure`.
+- **Can't log in? (login bounces back to /login)**: the session cookie is only
+  marked `Secure` when the request is actually HTTPS (direct or via a proxy's
+  `X-Forwarded-Proto: https`). Plain-HTTP access (e.g. `http://vps-ip:3000`)
+  works — the cookie is set non-Secure. If you're behind a TLS proxy but still
+  can't log in, the proxy isn't forwarding `X-Forwarded-Proto` — either set it,
+  or the browser is dropping a `Secure` cookie sent over an internal HTTP hop.
 - **Multi-instance**: SQLite is single-writer; run **one** replica. For horizontal
   scale, swap the Drizzle driver for a hosted DB.

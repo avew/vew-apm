@@ -144,3 +144,31 @@ export async function login(
 }
 
 export const SESSION_COOKIE = COOKIE_NAME;
+
+/**
+ * Session cookie options. `Secure` is set only when the request is actually
+ * served over HTTPS — directly, or via a reverse proxy that sets
+ * `X-Forwarded-Proto: https`. Keying off the real protocol (not NODE_ENV) lets
+ * a plain-HTTP self-hosted deploy (e.g. http://vps-ip:3000) still log in; a
+ * Secure cookie would be dropped by the browser over HTTP.
+ */
+export function sessionCookieOptions(req: Request) {
+  const xfp = req.headers.get("x-forwarded-proto");
+  let https = false;
+  if (xfp) {
+    https = xfp.split(",")[0].trim() === "https";
+  } else {
+    try {
+      https = new URL(req.url).protocol === "https:";
+    } catch {
+      https = false;
+    }
+  }
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: https,
+    path: "/",
+    maxAge: 60 * 60 * 24 * 7,
+  };
+}

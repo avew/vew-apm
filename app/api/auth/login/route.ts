@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { login, SESSION_COOKIE } from "@/lib/auth";
+import { login, SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth";
 import { retryAfterMs, recordFailure, reset } from "@/lib/rate-limit";
 
 const Body = z.object({
@@ -50,12 +50,6 @@ export async function POST(req: Request) {
   reset(ipKey);
   reset(userKey);
   const res = NextResponse.json({ ok: true });
-  res.cookies.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7,
-  });
+  res.cookies.set(SESSION_COOKIE, token, sessionCookieOptions(req));
   return res;
 }

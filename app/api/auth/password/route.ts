@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { changeCredentials, issueSession, SESSION_COOKIE } from "@/lib/auth";
+import { changeCredentials, issueSession, SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth";
 import { requireUser } from "@/lib/session";
 
 const Body = z.object({
@@ -30,12 +30,6 @@ export async function PATCH(req: Request) {
   }
   const token = await issueSession(parse.data.newUsername);
   const res = NextResponse.json({ ok: true });
-  res.cookies.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7,
-  });
+  res.cookies.set(SESSION_COOKIE, token, sessionCookieOptions(req));
   return res;
 }
