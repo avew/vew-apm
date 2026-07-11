@@ -9,6 +9,7 @@ import {
   type PublicIncident,
 } from "@/lib/status";
 import { groupByName } from "@/lib/grouping";
+import { Wrench } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +52,10 @@ const SEG_TITLE: Record<DaySeg, string> = {
 
 function pct(n: number) {
   return `${n.toFixed(n >= 99.995 ? 0 : 2)}%`;
+}
+
+function fmtDate(d: Date) {
+  return format(d, "MMM d, HH:mm");
 }
 
 function UptimeBar({ history }: { history: DaySeg[] }) {
@@ -113,6 +118,39 @@ export default async function StatusPage({
           <span className="text-sm font-medium">{banner.banner}</span>
         </div>
       </header>
+
+      {status.maintenance.length > 0 && (
+        <section className="mb-6 space-y-2">
+          {status.maintenance.map((mnt) => (
+            <div
+              key={mnt.id}
+              className={`rounded-xl border px-4 py-3 ${
+                mnt.active ? "border-amber-500/40" : "border-[var(--border)]"
+              }`}
+            >
+              <div className="flex items-center gap-2 text-sm">
+                <Wrench
+                  className={`h-4 w-4 shrink-0 ${
+                    mnt.active ? "text-amber-500" : "text-[var(--muted)]"
+                  }`}
+                />
+                <span className="font-medium">
+                  {mnt.active ? "Maintenance in progress" : "Scheduled maintenance"}
+                </span>
+                <span className="truncate text-[var(--muted)]">· {mnt.name}</span>
+              </div>
+              <div className="mt-1 text-xs text-[var(--muted)]">
+                {mnt.scope === "global" ? "All services" : mnt.serviceName}
+                {" · "}
+                {mnt.active
+                  ? `until ${fmtDate(mnt.end)}`
+                  : `${fmtDate(mnt.start)} → ${fmtDate(mnt.end)}`}
+                {mnt.reason ? ` · ${mnt.reason}` : ""}
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
 
       {status.services.length > 0 && (
         <div className="mb-4 flex items-center justify-end gap-1">
