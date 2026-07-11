@@ -152,6 +152,47 @@ export default async function StatusPage({
         </section>
       )}
 
+      {status.announcements.length > 0 && (
+        <section className="mb-6 space-y-3">
+          {status.announcements.map((a) => {
+            const active = a.status !== "resolved";
+            return (
+              <div
+                key={a.id}
+                className={`rounded-xl border px-4 py-3 ${
+                  active ? "border-amber-500/40" : "border-[var(--border)]"
+                }`}
+              >
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <span className="font-semibold">{a.title}</span>
+                  <span
+                    className={`text-xs font-medium ${
+                      a.impact === "critical"
+                        ? "text-red-600 dark:text-red-400"
+                        : "text-amber-600 dark:text-amber-400"
+                    }`}
+                  >
+                    {a.impact}
+                  </span>
+                  <span className="text-xs uppercase tracking-wide text-[var(--muted)]">
+                    {a.status}
+                  </span>
+                </div>
+                <ul className="mt-2 space-y-1.5 border-l-2 border-[var(--border)] pl-3">
+                  {a.updates.map((u) => (
+                    <li key={u.id} className="text-xs">
+                      <span className="font-medium capitalize">{u.status}</span>
+                      <span className="text-[var(--muted)]"> · {fmtDate(u.createdAt)}</span>
+                      <div className="text-[var(--muted)]">{u.body}</div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+        </section>
+      )}
+
       {status.services.length > 0 && (
         <div className="mb-4 flex items-center justify-end gap-1">
           <span className="mr-1 text-xs text-[var(--muted)]">Uptime window</span>

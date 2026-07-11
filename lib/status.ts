@@ -2,6 +2,7 @@ import { getDb, schema } from "@/lib/db/client";
 import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { uptimePct } from "./uptime";
 import { currentOccurrence, nextOccurrence } from "./maintenance";
+import { loadPublicStatusIncidents, type IncidentWithUpdates } from "./status-incidents";
 import type { StatusPage } from "@/lib/db/schema";
 
 export type PublicState = "operational" | "degraded" | "down";
@@ -181,6 +182,7 @@ export interface PublicStatus {
   incidents: PublicIncident[];
   moreIncidents: number;
   maintenance: PublicMaintenance[];
+  announcements: IncidentWithUpdates[];
 }
 
 const UPCOMING_WINDOW_MS = 7 * 86_400_000;
@@ -370,6 +372,8 @@ export async function getPublicStatus(
         : 1,
   );
 
+  const announcements = await loadPublicStatusIncidents(now);
+
   return {
     enabled: settings.enabled,
     title: settings.title,
@@ -379,5 +383,6 @@ export async function getPublicStatus(
     incidents: shown,
     moreIncidents: more,
     maintenance,
+    announcements,
   };
 }

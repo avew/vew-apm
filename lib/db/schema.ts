@@ -205,6 +205,34 @@ export const alertSettings = sqliteTable("alert_settings", {
   updatedAt: ts("updated_at"),
 });
 
+// Operator-authored ("manual") incidents shown on the public status page, with
+// a timeline of updates. Distinct from the auto-detected `incidents` table.
+export const statusIncidents = sqliteTable("status_incidents", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  title: text("title").notNull(),
+  // "minor" | "major" | "critical"
+  impact: text("impact").notNull().default("minor"),
+  // "investigating" | "identified" | "monitoring" | "resolved"
+  status: text("status").notNull().default("investigating"),
+  startedAt: ts("started_at"),
+  resolvedAt: integer("resolved_at", { mode: "timestamp" }),
+  updatedAt: ts("updated_at"),
+});
+
+export const statusIncidentUpdates = sqliteTable(
+  "status_incident_updates",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    incidentId: integer("incident_id")
+      .notNull()
+      .references(() => statusIncidents.id, { onDelete: "cascade" }),
+    status: text("status").notNull(),
+    body: text("body").notNull(),
+    createdAt: ts("created_at"),
+  },
+  (t) => [index("status_incident_update_idx").on(t.incidentId)],
+);
+
 export const statusPage = sqliteTable("status_page", {
   id: integer("id").primaryKey(),
   // master switch: /status 404s until this is on
@@ -215,6 +243,8 @@ export const statusPage = sqliteTable("status_page", {
 
 export type Monitor = typeof monitors.$inferSelect;
 export type StatusPage = typeof statusPage.$inferSelect;
+export type StatusIncident = typeof statusIncidents.$inferSelect;
+export type StatusIncidentUpdate = typeof statusIncidentUpdates.$inferSelect;
 export type NewMonitor = typeof monitors.$inferInsert;
 export type Check = typeof checks.$inferSelect;
 export type NewCheck = typeof checks.$inferInsert;
