@@ -14,6 +14,7 @@ interface Values {
   renotifyMinutes: number;
   certWarnDays: number;
   certCritDays: number;
+  sloTarget: number;
   retentionDays: number;
 }
 
@@ -149,6 +150,17 @@ export function AlertSettingsForm({ initial }: { initial: Values }) {
           <span className="text-xs text-[var(--muted)]">
             Reminders keep firing until the incident resolves. A warning that
             escalates to critical re-alerts immediately. 0 = notify once only.
+          </span>
+        </label>
+      </fieldset>
+
+      <fieldset className="space-y-3">
+        <legend className="text-sm font-medium mb-1">SLO</legend>
+        <label className="block text-sm">
+          <span>Uptime target (%)</span>
+          <input className={cls} type="number" min={0} max={100} step={0.01} value={v.sloTarget} onChange={num("sloTarget")} />
+          <span className="text-xs text-[var(--muted)]">
+            Drives the SLO report (Reports tab) and per-monitor error budgets.
           </span>
         </label>
       </fieldset>

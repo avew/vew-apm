@@ -33,6 +33,8 @@ disk usage as a time series, and can't track Eureka registry membership.
 - **Monitor groups** — an optional label per monitor; the dashboard and public
   status page section monitors by group (named groups first, ungrouped last).
 - **Health probes** panel — plain-language liveness/readiness with K8s consequence.
+- **SLO report** — per-monitor uptime vs a target (global default + per-monitor
+  override) over 7/30/90 days, with error-budget consumption.
 - **Incidents** — global page + per-monitor log, ongoing count badge, auto-resolve.
 - **Announcements** — operator-posted incidents with an update timeline
   (Investigating → Identified → Monitoring → Resolved), shown on the public

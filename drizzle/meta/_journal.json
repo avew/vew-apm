@@ -43,6 +43,13 @@
       "when": 1784015978470,
       "tag": "0005_sleepy_ultragirl",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1784017002784,
+      "tag": "0006_fixed_gateway",
+      "breakpoints": true
     }
   ]
 }

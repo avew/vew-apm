@@ -28,6 +28,7 @@ export default async function AlertsSettingsPage() {
             renotifyMinutes: settings.renotifyMinutes,
             certWarnDays: settings.certWarnDays,
             certCritDays: settings.certCritDays,
+            sloTarget: settings.sloTarget,
             retentionDays: settings.retentionDays,
           }}
         />
