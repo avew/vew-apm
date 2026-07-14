@@ -45,6 +45,14 @@ export function alertKey(a: {
   return `${a.kind}::${a.componentPath ?? ""}`;
 }
 
+/** Nearest-rank percentile (p in 0..100). Returns 0 for an empty set. */
+export function percentile(values: number[], p: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const rank = Math.ceil((p / 100) * sorted.length);
+  return sorted[Math.min(sorted.length - 1, Math.max(0, rank - 1))];
+}
+
 export function evaluateRules(ctx: RuleContext): DesiredAlert[] {
   const out: DesiredAlert[] = [];
   const t = ctx.thresholds;
@@ -94,21 +102,22 @@ export function evaluateRules(ctx: RuleContext): DesiredAlert[] {
     }
   }
 
-  // 3. Latency — rolling avg over last `latencyWindow` checks.
+  // 3. Latency — p95 over last `latencyWindow` checks. p95 (not avg) so a burst
+  //    of slow responses trips the alert instead of being averaged away.
   const samples = ctx.recentChecks
     .slice(0, Math.max(1, t.latencyWindow))
     .map((c) => c.responseMs)
     .filter((v): v is number => typeof v === "number");
   if (samples.length >= 1) {
-    const avg = samples.reduce((a, b) => a + b, 0) / samples.length;
-    if (avg >= t.latencyWarnMs) {
+    const p95 = percentile(samples, 95);
+    if (p95 >= t.latencyWarnMs) {
       out.push({
         kind: "latency",
         componentPath: null,
         severity: "warning",
-        metricValue: avg,
+        metricValue: p95,
         threshold: t.latencyWarnMs,
-        reason: `avg ${Math.round(avg)}ms ≥ ${t.latencyWarnMs}ms`,
+        reason: `p95 ${Math.round(p95)}ms ≥ ${t.latencyWarnMs}ms`,
       });
     }
   }
