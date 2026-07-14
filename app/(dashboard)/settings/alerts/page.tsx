@@ -26,6 +26,8 @@ export default async function AlertsSettingsPage() {
             serviceGraceSeconds: settings.serviceGraceSeconds,
             componentGraceSeconds: settings.componentGraceSeconds,
             renotifyMinutes: settings.renotifyMinutes,
+            certWarnDays: settings.certWarnDays,
+            certCritDays: settings.certCritDays,
             retentionDays: settings.retentionDays,
           }}
         />

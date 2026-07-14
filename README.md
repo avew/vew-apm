@@ -26,6 +26,7 @@ disk usage as a time series, and can't track Eureka registry membership.
     monitor page also shows p50 / p95 / p99
   - Component `DOWN` (critical) / `OUT_OF_SERVICE` (warning), grace-debounced
   - Service registry — a service that was seen but disappears past a grace window
+  - TLS certificate expiry — warn/critical days before (or after) `notAfter`, for https monitors
   - Global defaults in **Settings → Alerts**, optional **per-monitor overrides**.
 - **Service registry** — auto-seeds every service on first sight; marks `DOWN`
   when a tracked service vanishes, `STALE` when the endpoint is unreachable.

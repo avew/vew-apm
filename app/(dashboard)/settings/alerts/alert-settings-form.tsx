@@ -12,6 +12,8 @@ interface Values {
   serviceGraceSeconds: number;
   componentGraceSeconds: number;
   renotifyMinutes: number;
+  certWarnDays: number;
+  certCritDays: number;
   retentionDays: number;
 }
 
@@ -120,6 +122,23 @@ export function AlertSettingsForm({ initial }: { initial: Values }) {
             first missed check.
           </span>
         </label>
+      </fieldset>
+
+      <fieldset className="space-y-3">
+        <legend className="text-sm font-medium mb-1">TLS certificate</legend>
+        <div className="grid grid-cols-2 gap-4">
+          <label className="block text-sm">
+            <span>Warn ≤ (days to expiry)</span>
+            <input className={cls} type="number" min={0} max={3650} value={v.certWarnDays} onChange={num("certWarnDays")} />
+          </label>
+          <label className="block text-sm">
+            <span>Critical ≤ (days to expiry)</span>
+            <input className={cls} type="number" min={0} max={3650} value={v.certCritDays} onChange={num("certCritDays")} />
+          </label>
+        </div>
+        <span className="text-xs text-[var(--muted)]">
+          For https monitors. Alerts before (or after) the certificate expires.
+        </span>
       </fieldset>
 
       <fieldset className="space-y-3">

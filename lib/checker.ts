@@ -1,3 +1,4 @@
+import tls from "node:tls";
 import { getDb, schema } from "@/lib/db/client";
 import { and, eq, lte, desc, inArray } from "drizzle-orm";
 import { parseHealth, type ParsedHealth } from "./parser";
@@ -19,6 +20,53 @@ interface FetchResult {
   httpStatus: number | null;
   errorText: string | null;
   rawJson: unknown;
+}
+
+/**
+ * Read the TLS certificate's expiry for an https URL. rejectUnauthorized:false
+ * so we still read expired/self-signed certs (we're monitoring, not trusting).
+ * Returns null for non-https URLs or on any connection failure.
+ */
+export function fetchCertExpiry(
+  urlStr: string,
+  timeoutMs: number,
+): Promise<Date | null> {
+  let u: URL;
+  try {
+    u = new URL(urlStr);
+  } catch {
+    return Promise.resolve(null);
+  }
+  if (u.protocol !== "https:") return Promise.resolve(null);
+  const port = u.port ? Number(u.port) : 443;
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v: Date | null) => {
+      if (done) return;
+      done = true;
+      resolve(v);
+    };
+    const socket = tls.connect(
+      {
+        host: u.hostname,
+        port,
+        servername: u.hostname,
+        rejectUnauthorized: false,
+        timeout: timeoutMs,
+      },
+      () => {
+        const cert = socket.getPeerCertificate();
+        socket.end();
+        const valid = cert && cert.valid_to ? new Date(cert.valid_to) : null;
+        finish(valid && !isNaN(valid.getTime()) ? valid : null);
+      },
+    );
+    socket.on("error", () => finish(null));
+    socket.on("timeout", () => {
+      socket.destroy();
+      finish(null);
+    });
+  });
 }
 
 // Actuator health payloads are KBs; cap what we read so a misbehaving or
@@ -408,6 +456,7 @@ async function reconcileIncidents(
   result: FetchResult,
   now: Date,
   muted: boolean,
+  certDaysLeft: number | null,
 ): Promise<void> {
   const db = getDb();
   const thresholds = await getEffectiveThresholds(monitor);
@@ -451,6 +500,7 @@ async function reconcileIncidents(
     })) ?? [],
     eurekaServices,
     eurekaMissing,
+    certDaysLeft,
   });
   const desired = new Map(desiredList.map((a) => [alertKey(a), a]));
 
@@ -574,13 +624,25 @@ export async function runCheck(monitor: Monitor): Promise<void> {
   const result = await fetchHealth(monitor);
   const muted = await isMonitorMuted(monitor.id, now);
   persistCheck(monitor, result, muted);
-  await reconcileIncidents(monitor, result, now, muted);
+
+  // TLS cert: re-read for https monitors; keep the last known value on failure
+  // so a transient TLS blip doesn't clear/flap the expiry alert.
+  const certTimeout = Math.min(monitor.timeoutMs, 5000);
+  const freshCert = await fetchCertExpiry(monitor.url, certTimeout);
+  const certExpiresAt = freshCert ?? monitor.certExpiresAt;
+  const certDaysLeft = certExpiresAt
+    ? (certExpiresAt.getTime() - now.getTime()) / 86_400_000
+    : null;
+
+  await reconcileIncidents(monitor, result, now, muted, certDaysLeft);
   await db
     .update(schema.monitors)
     .set({
       lastStatus: result.overall,
       nextCheckAt: new Date(now.getTime() + monitor.intervalSeconds * 1000),
       updatedAt: now,
+      certExpiresAt,
+      ...(freshCert ? { certCheckedAt: now } : {}),
     })
     .where(eq(schema.monitors.id, monitor.id));
 }

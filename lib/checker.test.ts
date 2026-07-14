@@ -32,7 +32,7 @@ let dbDir: string;
 let healthBody: unknown = { status: "UP", components: {} };
 let webhookCalls: Record<string, unknown>[] = [];
 
-const ACTUATOR_URL = "https://svc.test/actuator/health";
+const ACTUATOR_URL = "http://svc.test/actuator/health"; // http: skips the TLS cert probe
 const WEBHOOK_URL = "https://hooks.test/webhook";
 
 beforeAll(async () => {

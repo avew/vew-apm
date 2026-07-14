@@ -13,6 +13,7 @@ function ctx(partial: Partial<RuleContext>): RuleContext {
     disks: [],
     eurekaServices: [],
     eurekaMissing: [],
+    certDaysLeft: null,
     ...partial,
   };
 }
@@ -61,6 +62,25 @@ describe("evaluateRules — availability duration gate", () => {
     ];
     const alerts = evaluateRules(ctx({ recentChecks }));
     expect(alerts.find((a) => a.kind === "availability")).toBeUndefined();
+  });
+});
+
+describe("evaluateRules — cert expiry", () => {
+  it("warns within certWarnDays, critical within certCritDays", () => {
+    const warn = evaluateRules(ctx({ certDaysLeft: 10 })).find((a) => a.kind === "cert_expiry");
+    expect(warn?.severity).toBe("warning"); // 10 ≤ 14, > 3
+
+    const crit = evaluateRules(ctx({ certDaysLeft: 2 })).find((a) => a.kind === "cert_expiry");
+    expect(crit?.severity).toBe("critical"); // 2 ≤ 3
+
+    const expired = evaluateRules(ctx({ certDaysLeft: -5 })).find((a) => a.kind === "cert_expiry");
+    expect(expired?.severity).toBe("critical");
+    expect(expired?.reason).toMatch(/expired/i);
+  });
+
+  it("no alert when plenty of time left or unknown", () => {
+    expect(evaluateRules(ctx({ certDaysLeft: 60 })).find((a) => a.kind === "cert_expiry")).toBeUndefined();
+    expect(evaluateRules(ctx({ certDaysLeft: null })).find((a) => a.kind === "cert_expiry")).toBeUndefined();
   });
 });
 

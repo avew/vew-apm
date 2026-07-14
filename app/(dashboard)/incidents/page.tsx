@@ -14,6 +14,7 @@ const KIND_LABEL: Record<string, string> = {
   component_down: "Component down",
   eureka: "Eureka",
   service_missing: "Service missing",
+  cert_expiry: "TLS certificate",
   down: "Down",
 };
 
