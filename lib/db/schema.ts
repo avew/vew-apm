@@ -42,6 +42,11 @@ export const monitors = sqliteTable(
     serviceGraceSeconds: integer("service_grace_seconds"),
     componentGraceSeconds: integer("component_grace_seconds"),
     renotifyMinutes: integer("renotify_minutes"),
+    certWarnDays: integer("cert_warn_days"),
+    certCritDays: integer("cert_crit_days"),
+    // latest observed TLS cert expiry (https monitors only)
+    certExpiresAt: integer("cert_expires_at", { mode: "timestamp" }),
+    certCheckedAt: integer("cert_checked_at", { mode: "timestamp" }),
     createdAt: ts("created_at"),
     updatedAt: ts("updated_at"),
   },
@@ -200,6 +205,9 @@ export const alertSettings = sqliteTable("alert_settings", {
   componentGraceSeconds: integer("component_grace_seconds").notNull().default(60),
   // re-send an alert for a still-open critical incident every N minutes; 0 = off
   renotifyMinutes: integer("renotify_minutes").notNull().default(30),
+  // TLS cert expiry alerting (days before notAfter)
+  certWarnDays: integer("cert_warn_days").notNull().default(14),
+  certCritDays: integer("cert_crit_days").notNull().default(3),
   // days of check history to keep; 0 = keep forever
   retentionDays: integer("retention_days").notNull().default(30),
   updatedAt: ts("updated_at"),

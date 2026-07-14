@@ -39,6 +39,7 @@ const INCIDENT_LABELS: Record<string, string> = {
   latency: "Elevated latency",
   eureka: "Registry issue",
   service_missing: "Dependency missing",
+  cert_expiry: "Certificate expiring",
   down: "Service issue",
 };
 

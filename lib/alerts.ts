@@ -12,6 +12,8 @@ export interface EffectiveThresholds {
   serviceGraceSeconds: number;
   componentGraceSeconds: number;
   renotifyMinutes: number;
+  certWarnDays: number;
+  certCritDays: number;
 }
 
 export const ALERT_DEFAULTS: EffectiveThresholds = {
@@ -24,6 +26,8 @@ export const ALERT_DEFAULTS: EffectiveThresholds = {
   serviceGraceSeconds: 30,
   componentGraceSeconds: 60,
   renotifyMinutes: 30,
+  certWarnDays: 14,
+  certCritDays: 3,
 };
 
 export async function loadAlertSettings(): Promise<AlertSettings> {
@@ -68,6 +72,8 @@ export function mergeThresholds(
     componentGraceSeconds:
       monitor.componentGraceSeconds ?? global.componentGraceSeconds,
     renotifyMinutes: monitor.renotifyMinutes ?? global.renotifyMinutes,
+    certWarnDays: monitor.certWarnDays ?? global.certWarnDays,
+    certCritDays: monitor.certCritDays ?? global.certCritDays,
   };
 }
 
@@ -85,6 +91,8 @@ export async function getEffectiveThresholds(
     serviceGraceSeconds: row.serviceGraceSeconds,
     componentGraceSeconds: row.componentGraceSeconds,
     renotifyMinutes: row.renotifyMinutes,
+    certWarnDays: row.certWarnDays,
+    certCritDays: row.certCritDays,
   };
   return mergeThresholds(global, monitor);
 }

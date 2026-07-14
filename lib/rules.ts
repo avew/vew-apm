@@ -8,7 +8,8 @@ export type AlertKind =
   | "latency"
   | "component_down"
   | "eureka"
-  | "service_missing";
+  | "service_missing"
+  | "cert_expiry";
 
 export interface DesiredAlert {
   kind: AlertKind;
@@ -36,6 +37,8 @@ export interface RuleContext {
   eurekaServices: { serviceName: string; instanceCount: number }[];
   /** Services seen recently (within grace) but absent from the latest check. */
   eurekaMissing: string[];
+  /** Days until the TLS cert expires (null = not an https monitor / unknown). */
+  certDaysLeft: number | null;
 }
 
 export function alertKey(a: {
@@ -158,6 +161,33 @@ export function evaluateRules(ctx: RuleContext): DesiredAlert[] {
         metricValue: null,
         threshold: null,
         reason: `${name} is down — was registered but missing from the health check`,
+      });
+    }
+  }
+
+  // 7. TLS certificate expiry.
+  if (ctx.certDaysLeft !== null) {
+    const days = ctx.certDaysLeft;
+    if (days <= t.certCritDays) {
+      out.push({
+        kind: "cert_expiry",
+        componentPath: null,
+        severity: "critical",
+        metricValue: days,
+        threshold: t.certCritDays,
+        reason:
+          days < 0
+            ? `TLS certificate expired ${Math.abs(Math.round(days))}d ago`
+            : `TLS certificate expires in ${Math.round(days)}d (≤ ${t.certCritDays}d)`,
+      });
+    } else if (days <= t.certWarnDays) {
+      out.push({
+        kind: "cert_expiry",
+        componentPath: null,
+        severity: "warning",
+        metricValue: days,
+        threshold: t.certWarnDays,
+        reason: `TLS certificate expires in ${Math.round(days)}d (≤ ${t.certWarnDays}d)`,
       });
     }
   }

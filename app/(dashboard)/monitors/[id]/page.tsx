@@ -206,6 +206,12 @@ export default async function MonitorDetail({
       }
     : null;
 
+  const certDays = monitor.certExpiresAt
+    ? // server component renders once per request, so Date.now() is stable here
+      // eslint-disable-next-line react-hooks/purity
+      Math.round((monitor.certExpiresAt.getTime() - Date.now()) / 86_400_000)
+    : null;
+
   const status = monitor.lastStatus ?? "UNKNOWN";
   const statusBadge =
     status === "UP"
@@ -242,6 +248,17 @@ export default async function MonitorDetail({
             </div>
             <div className="text-xs text-[var(--muted)] mt-1">
               interval {monitor.intervalSeconds}s · timeout {monitor.timeoutMs}ms
+              {monitor.certExpiresAt && certDays !== null && (
+                <>
+                  {" · "}TLS cert{" "}
+                  {certDays < 0 ? (
+                    <span className="text-red-600 dark:text-red-400">expired</span>
+                  ) : (
+                    <>expires in {certDays}d</>
+                  )}{" "}
+                  ({monitor.certExpiresAt.toLocaleDateString()})
+                </>
+              )}
             </div>
           </div>
           <AutoRefresh />
