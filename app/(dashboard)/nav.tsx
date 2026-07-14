@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Settings, LayoutGrid, Siren } from "lucide-react";
+import { Settings, LayoutGrid, Siren, Megaphone } from "lucide-react";
 import { useT } from "@/lib/i18n-client";
 import type { MsgKey } from "@/lib/i18n";
 
@@ -14,6 +14,7 @@ const LINKS: {
 }[] = [
   { href: "/", key: "navMonitors", icon: LayoutGrid, exact: true },
   { href: "/incidents", key: "navIncidents", icon: Siren, exact: false, badge: true },
+  { href: "/announcements", key: "navAnnouncements", icon: Megaphone, exact: false },
   { href: "/settings", key: "navSettings", icon: Settings, exact: false },
 ];
 

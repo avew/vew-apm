@@ -32,6 +32,9 @@ disk usage as a time series, and can't track Eureka registry membership.
   status page section monitors by group (named groups first, ungrouped last).
 - **Health probes** panel — plain-language liveness/readiness with K8s consequence.
 - **Incidents** — global page + per-monitor log, ongoing count badge, auto-resolve.
+- **Announcements** — operator-posted incidents with an update timeline
+  (Investigating → Identified → Monitoring → Resolved), shown on the public
+  status page alongside the auto-detected ones.
 - **Notifications** — global channels (webhook / email via Resend / Telegram);
   every enabled channel fires for all monitors. Per-channel config (incl. Resend
   API key); no env var needed. Delivery retries with backoff; a still-open
