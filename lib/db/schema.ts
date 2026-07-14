@@ -44,6 +44,8 @@ export const monitors = sqliteTable(
     renotifyMinutes: integer("renotify_minutes"),
     certWarnDays: integer("cert_warn_days"),
     certCritDays: integer("cert_crit_days"),
+    // SLO uptime target % override (null = inherit global)
+    sloTarget: real("slo_target"),
     // latest observed TLS cert expiry (https monitors only)
     certExpiresAt: integer("cert_expires_at", { mode: "timestamp" }),
     certCheckedAt: integer("cert_checked_at", { mode: "timestamp" }),
@@ -208,6 +210,8 @@ export const alertSettings = sqliteTable("alert_settings", {
   // TLS cert expiry alerting (days before notAfter)
   certWarnDays: integer("cert_warn_days").notNull().default(14),
   certCritDays: integer("cert_crit_days").notNull().default(3),
+  // global SLO uptime target %
+  sloTarget: real("slo_target").notNull().default(99.9),
   // days of check history to keep; 0 = keep forever
   retentionDays: integer("retention_days").notNull().default(30),
   updatedAt: ts("updated_at"),

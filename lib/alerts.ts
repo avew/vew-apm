@@ -45,7 +45,10 @@ export async function loadAlertSettings(): Promise<AlertSettings> {
 }
 
 export async function updateAlertSettings(
-  patch: Partial<EffectiveThresholds> & { retentionDays?: number },
+  patch: Partial<EffectiveThresholds> & {
+    retentionDays?: number;
+    sloTarget?: number;
+  },
 ): Promise<void> {
   const db = getDb();
   await loadAlertSettings(); // ensure row exists

@@ -15,6 +15,7 @@ const Body = z.object({
   renotifyMinutes: z.number().int().min(0).max(10080).optional(),
   certWarnDays: z.number().int().min(0).max(3650).optional(),
   certCritDays: z.number().int().min(0).max(3650).optional(),
+  sloTarget: z.number().min(0).max(100).optional(),
   retentionDays: z.number().int().min(0).max(3650).optional(),
 });
 
