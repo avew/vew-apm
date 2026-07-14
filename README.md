@@ -22,7 +22,8 @@ disk usage as a time series, and can't track Eureka registry membership.
 - **Threshold rule engine** with warning/critical severities:
   - Disk usage % (warn / critical)
   - Availability — DOWN sustained ≥ N minutes (debounced)
-  - Latency — rolling average over N checks
+  - Latency — p95 over the last N checks (spikes an average would hide); the
+    monitor page also shows p50 / p95 / p99
   - Component `DOWN` (critical) / `OUT_OF_SERVICE` (warning), grace-debounced
   - Service registry — a service that was seen but disappears past a grace window
   - Global defaults in **Settings → Alerts**, optional **per-monitor overrides**.

@@ -7,6 +7,7 @@ import { uptimePct } from "@/lib/uptime";
 import { loadAlertSettings } from "@/lib/alerts";
 import { getT } from "@/lib/i18n-server";
 import { ResponseTimeChart } from "./response-chart";
+import { percentile } from "@/lib/rules";
 import { DiskChart } from "./disk-chart";
 import { MonitorActions } from "./monitor-actions";
 import { PublicToggle } from "./public-toggle";
@@ -194,6 +195,17 @@ export default async function MonitorDetail({
   );
   const t = await getT();
 
+  const latencyMs = checks
+    .map((c) => c.responseMs)
+    .filter((v): v is number => typeof v === "number");
+  const latencyStats = latencyMs.length
+    ? {
+        p50: percentile(latencyMs, 50),
+        p95: percentile(latencyMs, 95),
+        p99: percentile(latencyMs, 99),
+      }
+    : null;
+
   const status = monitor.lastStatus ?? "UNKNOWN";
   const statusBadge =
     status === "UP"
@@ -284,6 +296,24 @@ export default async function MonitorDetail({
 
       <section className="card p-5">
         <SectionHeader icon={Activity} title={t("secResponseTime")} hint="recent 300 checks" />
+        {latencyStats && (
+          <div className="mb-3 flex gap-6 text-sm">
+            {(
+              [
+                ["p50", latencyStats.p50],
+                ["p95", latencyStats.p95],
+                ["p99", latencyStats.p99],
+              ] as const
+            ).map(([label, v]) => (
+              <div key={label}>
+                <span className="text-xs uppercase tracking-wide text-[var(--muted)]">
+                  {label}
+                </span>{" "}
+                <span className="font-semibold tabular-nums">{Math.round(v)}ms</span>
+              </div>
+            ))}
+          </div>
+        )}
         <ResponseTimeChart
           data={checks
             .slice()

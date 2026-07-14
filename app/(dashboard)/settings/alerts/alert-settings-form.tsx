@@ -92,11 +92,11 @@ export function AlertSettingsForm({ initial }: { initial: Values }) {
         <legend className="text-sm font-medium mb-1">Latency</legend>
         <div className="grid grid-cols-2 gap-4">
           <label className="block text-sm">
-            <span>Warn when avg ≥ (ms)</span>
+            <span>Warn when p95 ≥ (ms)</span>
             <input className={cls} type="number" min={1} value={v.latencyWarnMs} onChange={num("latencyWarnMs")} />
           </label>
           <label className="block text-sm">
-            <span>Averaged over last N checks</span>
+            <span>p95 over last N checks</span>
             <input className={cls} type="number" min={1} max={100} value={v.latencyWindow} onChange={num("latencyWindow")} />
           </label>
         </div>

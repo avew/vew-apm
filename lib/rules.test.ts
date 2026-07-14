@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { evaluateRules, alertKey, type RuleContext } from "./rules";
+import { evaluateRules, alertKey, percentile, type RuleContext } from "./rules";
 import { ALERT_DEFAULTS } from "./alerts";
 
 const NOW = new Date("2026-07-09T12:00:00.000Z");
@@ -64,8 +64,22 @@ describe("evaluateRules — availability duration gate", () => {
   });
 });
 
-describe("evaluateRules — latency", () => {
-  it("warns when rolling avg >= threshold", () => {
+describe("percentile", () => {
+  it("computes nearest-rank percentiles", () => {
+    const v = Array.from({ length: 100 }, (_, i) => i + 1); // 1..100
+    expect(percentile(v, 50)).toBe(50);
+    expect(percentile(v, 95)).toBe(95);
+    expect(percentile(v, 99)).toBe(99);
+    expect(percentile(v, 100)).toBe(100);
+  });
+  it("is order-independent and handles empty", () => {
+    expect(percentile([9, 1, 5, 3], 50)).toBe(3);
+    expect(percentile([], 95)).toBe(0);
+  });
+});
+
+describe("evaluateRules — latency (p95)", () => {
+  it("warns when p95 >= threshold", () => {
     const recentChecks = Array.from({ length: 5 }, (_, i) => ({
       checkedAt: new Date(NOW.getTime() - i * 60_000),
       overallStatus: "UP",
@@ -75,6 +89,24 @@ describe("evaluateRules — latency", () => {
     const lat = alerts.find((a) => a.kind === "latency");
     expect(lat?.severity).toBe("warning");
     expect(lat?.metricValue).toBe(3000);
+    expect(lat?.reason).toContain("p95");
+  });
+
+  it("fires on spikes that a rolling AVG would hide", () => {
+    // 18 fast + 2 very slow over a 20-check window → avg 990ms (under 2000) but
+    // p95 = 9000ms, so p95 alerts where avg wouldn't.
+    const recentChecks = [
+      { checkedAt: NOW, overallStatus: "UP", responseMs: 9000 },
+      { checkedAt: new Date(NOW.getTime() - 60_000), overallStatus: "UP", responseMs: 9000 },
+      ...Array.from({ length: 18 }, (_, i) => ({
+        checkedAt: new Date(NOW.getTime() - (i + 2) * 60_000),
+        overallStatus: "UP",
+        responseMs: 100,
+      })),
+    ];
+    const t = { ...ALERT_DEFAULTS, latencyWindow: 20 };
+    const alerts = evaluateRules(ctx({ recentChecks, thresholds: t }));
+    expect(alerts.find((a) => a.kind === "latency")?.metricValue).toBe(9000);
   });
 
   it("no alert when fast", () => {
