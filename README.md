@@ -16,6 +16,10 @@ disk usage as a time series, and can't track Eureka registry membership.
 
 - **Per-monitor polling** at a configurable interval; latency, HTTP status, and
   raw body captured each check.
+- **Check types** — `actuator` (parse the Spring health tree), `http` (up on a
+  2xx / expected status + optional body keyword), or `json` (up from a value at
+  a JSON path you pick). A "Fetch sample" button previews the endpoint so you
+  can see the shape before choosing a path.
 - **Actuator parser** — recursive walk of `components` into dot-paths, plus disk
   (`total/free/used%`), Eureka apps, discovery services, health probes, and
   config property sources.

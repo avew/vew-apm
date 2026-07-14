@@ -30,6 +30,7 @@ let dbDir: string;
 
 // Mutable state the mocked fetch reads.
 let healthBody: unknown = { status: "UP", components: {} };
+let healthStatus = 200;
 let webhookCalls: Record<string, unknown>[] = [];
 
 const ACTUATOR_URL = "http://svc.test/actuator/health"; // http: skips the TLS cert probe
@@ -60,7 +61,7 @@ beforeAll(async () => {
         return new Response("ok", { status: 200 });
       }
       return new Response(JSON.stringify(healthBody), {
-        status: 200,
+        status: healthStatus,
         headers: { "content-type": "application/json" },
       });
     }),
@@ -90,6 +91,7 @@ afterAll(() => {
 beforeEach(() => {
   webhookCalls = [];
   healthBody = { status: "UP", components: {} };
+  healthStatus = 200;
 });
 
 // Fresh monitor per test → row isolation without truncating shared tables.
@@ -345,5 +347,48 @@ describe("renotify + escalation", () => {
     await runCheck(m);
     incs = await incidentsFor(m.id);
     expect(webhookCalls).toHaveLength(0);
+  });
+});
+
+describe("generic monitor types", () => {
+  async function lastStatus(id: number) {
+    const [m] = await getDb()
+      .select()
+      .from(schema.monitors)
+      .where(eq(schema.monitors.id, id));
+    return m.lastStatus;
+  }
+
+  it("http: UP on 2xx, DOWN on 5xx", async () => {
+    const m = await createMonitor({ type: "http" });
+    await runCheck(m);
+    expect(await lastStatus(m.id)).toBe("UP");
+
+    healthStatus = 503;
+    const m2 = await createMonitor({ type: "http" });
+    await runCheck(m2);
+    expect(await lastStatus(m2.id)).toBe("DOWN");
+  });
+
+  it("http: keyword must be present", async () => {
+    healthBody = { msg: "pong" };
+    const ok = await createMonitor({ type: "http", keyword: "pong" });
+    const bad = await createMonitor({ type: "http", keyword: "zzz" });
+    await runCheck(ok);
+    await runCheck(bad);
+    expect(await lastStatus(ok.id)).toBe("UP");
+    expect(await lastStatus(bad.id)).toBe("DOWN");
+  });
+
+  it("json: status from a path", async () => {
+    healthBody = { health: "green" };
+    const up = await createMonitor({ type: "json", statusPath: "$.health", statusUpValue: "green" });
+    await runCheck(up);
+    expect(await lastStatus(up.id)).toBe("UP");
+
+    healthBody = { health: "red" };
+    const down = await createMonitor({ type: "json", statusPath: "$.health", statusUpValue: "green" });
+    await runCheck(down);
+    expect(await lastStatus(down.id)).toBe("DOWN");
   });
 });

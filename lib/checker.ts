@@ -2,6 +2,7 @@ import tls from "node:tls";
 import { getDb, schema } from "@/lib/db/client";
 import { and, eq, lte, desc, inArray } from "drizzle-orm";
 import { parseHealth, type ParsedHealth } from "./parser";
+import { evaluateHttp, evaluateJson } from "./check-eval";
 import { isMonitorMuted } from "./maintenance";
 import { dispatch } from "./notifier";
 import { getEffectiveThresholds } from "./alerts";
@@ -129,6 +130,50 @@ async function fetchHealth(monitor: Monitor): Promise<FetchResult> {
     });
     const responseMs = Date.now() - started;
     const { text, tooLarge } = await readBodyCapped(res);
+    if (tooLarge) {
+      return {
+        overall: "DOWN",
+        parsed: null,
+        responseMs,
+        httpStatus: res.status,
+        errorText: `response too large (> ${MAX_BODY_BYTES} bytes)`,
+        rawJson: null,
+      };
+    }
+
+    // Generic monitor types: up/down from status code, keyword, or a JSON path
+    // — no actuator parsing.
+    if (monitor.type === "http") {
+      const v = evaluateHttp(res.status, text ?? "", {
+        expectStatus: monitor.expectStatus,
+        keyword: monitor.keyword,
+      });
+      return {
+        overall: v.up ? "UP" : "DOWN",
+        parsed: null,
+        responseMs,
+        httpStatus: res.status,
+        errorText: v.reason,
+        rawJson: null,
+      };
+    }
+    if (monitor.type === "json") {
+      const v = evaluateJson(res.status, text ?? "", {
+        statusPath: monitor.statusPath ?? "$.status",
+        statusUpValue: monitor.statusUpValue,
+        keyword: monitor.keyword,
+      });
+      return {
+        overall: v.up ? "UP" : "DOWN",
+        parsed: null,
+        responseMs,
+        httpStatus: res.status,
+        errorText: v.reason,
+        rawJson: null,
+      };
+    }
+
+    // actuator (default): parse the Spring health tree.
     let body: unknown = null;
     if (text !== null) {
       try {
@@ -137,17 +182,13 @@ async function fetchHealth(monitor: Monitor): Promise<FetchResult> {
         body = null;
       }
     }
-    if (!res.ok || tooLarge || !body) {
+    if (!res.ok || !body) {
       return {
         overall: "DOWN",
         parsed: null,
         responseMs,
         httpStatus: res.status,
-        errorText: !res.ok
-          ? `HTTP ${res.status}`
-          : tooLarge
-            ? `response too large (> ${MAX_BODY_BYTES} bytes)`
-            : "invalid json body",
+        errorText: !res.ok ? `HTTP ${res.status}` : "invalid json body",
         rawJson: body,
       };
     }
