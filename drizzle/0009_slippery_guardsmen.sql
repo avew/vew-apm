@@ -1,0 +1,1 @@
+CREATE INDEX `disk_check_idx` ON `disk_snapshots` (`check_id`);
