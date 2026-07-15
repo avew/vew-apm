@@ -8,6 +8,10 @@ import { desc } from "drizzle-orm";
 const WebhookConfig = z.object({
   url: z.string().url(),
   headers: z.record(z.string(), z.string()).optional(),
+  authType: z.enum(["none", "basic", "header", "bearer"]).optional(),
+  authUsername: z.string().max(200).optional(),
+  authHeaderName: z.string().max(120).optional(),
+  authHeaderValue: z.string().max(2000).optional(),
 });
 const EmailConfig = z.object({
   apiKey: z.string().min(1),

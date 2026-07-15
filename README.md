@@ -46,6 +46,7 @@ disk usage as a time series, and can't track Eureka registry membership.
   (Investigating → Identified → Monitoring → Resolved), shown on the public
   status page alongside the auto-detected ones.
 - **Notifications** — global channels (webhook / email via Resend / Telegram);
+  webhooks support request auth (None / Basic / Header / Bearer);
   every enabled channel fires for all monitors. Per-channel config (incl. Resend
   API key); no env var needed. Delivery retries with backoff; a still-open
   critical incident re-notifies every `renotifyMinutes` and escalates

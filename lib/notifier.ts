@@ -1,6 +1,6 @@
 import { getDb, schema } from "@/lib/db/client";
 import { eq } from "drizzle-orm";
-import { sendWebhook } from "./notifiers/webhook";
+import { sendWebhook, type WebhookConfig } from "./notifiers/webhook";
 import { sendEmail, type EmailConfig } from "./notifiers/email";
 import { sendTelegram, type TelegramConfig } from "./notifiers/telegram";
 import { withRetry } from "./retry";
@@ -95,7 +95,7 @@ export async function dispatch(ev: Event): Promise<void> {
       const label = `${c.kind}#${c.id}`;
       const send = async () => {
         if (c.kind === "webhook") {
-          await sendWebhook(cfg as { url: string; headers?: Record<string, string> }, payload);
+          await sendWebhook(cfg as unknown as WebhookConfig, payload);
         } else if (c.kind === "email") {
           await sendEmail(cfg as unknown as EmailConfig, subject, body);
         } else if (c.kind === "telegram") {
@@ -137,10 +137,7 @@ export async function sendTestConfig(
   const subject = "[Vew APM] Test notification";
   const body = "This is a test message from your Vew APM instance.";
   if (kind === "webhook") {
-    await sendWebhook(
-      cfg as { url: string; headers?: Record<string, string> },
-      { kind: "test", message: body },
-    );
+    await sendWebhook(cfg as unknown as WebhookConfig, { kind: "test", message: body });
   } else if (kind === "email") {
     await sendEmail(cfg as unknown as EmailConfig, subject, body);
   } else if (kind === "telegram") {

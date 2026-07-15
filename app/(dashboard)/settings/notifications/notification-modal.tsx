@@ -80,6 +80,13 @@ export function NotificationModal({
   const [template, setTemplate] = useState(str(cfg.template));
   // webhook
   const [url, setUrl] = useState(str(cfg.url));
+  // webhook request auth (authHeaderValue is the secret — blank in edit)
+  const [whAuthType, setWhAuthType] = useState(
+    (str(cfg.authType) || "none") as "none" | "basic" | "header" | "bearer",
+  );
+  const [whUsername, setWhUsername] = useState(str(cfg.authUsername));
+  const [whHeaderName, setWhHeaderName] = useState(str(cfg.authHeaderName));
+  const [whAuthValue, setWhAuthValue] = useState("");
   // email (apiKey is secret — always starts blank in edit)
   const [emailApiKey, setEmailApiKey] = useState("");
   const [showApiKey, setShowApiKey] = useState(false);
@@ -105,7 +112,18 @@ export function NotificationModal({
     }
     if (kind === "webhook") {
       if (!url.trim()) return null;
-      return { url: url.trim() };
+      return {
+        url: url.trim(),
+        authType: whAuthType,
+        ...(whAuthType === "basic" && whUsername.trim()
+          ? { authUsername: whUsername.trim() }
+          : {}),
+        ...(whAuthType === "header" && whHeaderName.trim()
+          ? { authHeaderName: whHeaderName.trim() }
+          : {}),
+        // include the secret only when typed; blank on edit keeps the stored one
+        ...(whAuthValue.trim() ? { authHeaderValue: whAuthValue.trim() } : {}),
+      };
     }
     // email
     const to = emailTo.split(",").map((s) => s.trim()).filter(Boolean);
@@ -321,16 +339,61 @@ export function NotificationModal({
           )}
 
           {kind === "webhook" && (
-            <label className="block text-sm">
-              <span className="font-medium">Webhook URL</span>
-              <input
-                className={cls}
-                type="url"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://hooks.example.com/xyz"
-              />
-            </label>
+            <>
+              <label className="block text-sm">
+                <span className="font-medium">Webhook URL</span>
+                <input
+                  className={cls}
+                  type="url"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  placeholder="https://hooks.example.com/xyz"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="font-medium">Authentication</span>
+                <select
+                  className={cls}
+                  value={whAuthType}
+                  onChange={(e) => setWhAuthType(e.target.value as typeof whAuthType)}
+                >
+                  <option value="none">None</option>
+                  <option value="basic">Basic Auth</option>
+                  <option value="header">Header Auth</option>
+                  <option value="bearer">Bearer / JWT</option>
+                </select>
+              </label>
+              {whAuthType === "basic" && (
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block text-sm">
+                    <span className="font-medium">Username</span>
+                    <input className={cls} value={whUsername} onChange={(e) => setWhUsername(e.target.value)} />
+                  </label>
+                  <label className="block text-sm">
+                    <span className="font-medium">Password</span>
+                    <input className={cls} type="password" value={whAuthValue} onChange={(e) => setWhAuthValue(e.target.value)} placeholder={isEdit ? "leave blank to keep" : ""} />
+                  </label>
+                </div>
+              )}
+              {whAuthType === "header" && (
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block text-sm">
+                    <span className="font-medium">Header name</span>
+                    <input className={cls} value={whHeaderName} onChange={(e) => setWhHeaderName(e.target.value)} placeholder="X-API-Key" />
+                  </label>
+                  <label className="block text-sm">
+                    <span className="font-medium">Header value</span>
+                    <input className={cls} type="password" value={whAuthValue} onChange={(e) => setWhAuthValue(e.target.value)} placeholder={isEdit ? "leave blank to keep" : ""} />
+                  </label>
+                </div>
+              )}
+              {whAuthType === "bearer" && (
+                <label className="block text-sm">
+                  <span className="font-medium">Token</span>
+                  <input className={cls} type="password" value={whAuthValue} onChange={(e) => setWhAuthValue(e.target.value)} placeholder={isEdit ? "leave blank to keep" : "JWT / bearer token"} />
+                </label>
+              )}
+            </>
           )}
 
           {kind === "email" && (
