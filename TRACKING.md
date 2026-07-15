@@ -1,28 +1,32 @@
 # Ops-Notification Track — Tracking
 
-Live status for the ops-notification roadmap. Plan detail lives in
+Status for the ops-notification roadmap. Plan detail lives in
 [docs/roadmap-ops-notification.md](docs/roadmap-ops-notification.md).
 
-**Legend:** ✅ done · 🚧 in progress · ⬜ not started · ⏸️ blocked
+**Legend:** 🚀 shipped · ✅ done · 🚧 in progress · ⬜ not started · ⏸️ blocked
 
-**All 7 phases complete.** 205 tests green · typecheck + build clean. Deferred
-refinements (interactive Slack/Telegram ack buttons, per-monitor escalation policy,
-schedule overrides, cross-monitor alert grouping, edit-dependency UI) are noted per
-phase below.
+## 🚀 SHIPPED — all 7 phases merged to `main`
 
-_Last updated: 2026-07-16 · branch `feat/notify-native-channels`_
+- **PR [#51](https://github.com/avew/vew-apm/pull/51)** merged 2026-07-16 (merge commit `1dd5a6f`).
+- CI green on merge: Lint · Typecheck · Test · Build ✅ · E2E (Playwright) ✅ · Docker build ✅ · Dependency audit ✅.
+- 211 tests green (54 new for this track) · typecheck + build clean.
+- Deferred refinements (interactive Slack/Telegram ack buttons, per-monitor escalation
+  policy, schedule overrides, cross-monitor alert grouping, edit-dependency UI) are
+  noted per phase below and are non-blocking.
+
+_Last updated: 2026-07-16 · merged from `feat/notify-native-channels` (branch deleted)_
 
 ## Phase status
 
 | Phase | Title | Effort | Depends on | Status |
 |-------|-------|--------|-----------|--------|
-| P1 | Native channels (Slack / Discord / Teams) | S | — | ✅ |
-| P2 | Notification routing (monitor / group / severity) | L | — | ✅ |
-| P3 | Acknowledge & snooze (inbound) | M | P1 | ✅ |
-| P4 | Escalation policies (multi-step) | M–L | P2, P3 | ✅ |
-| P5 | On-call schedules + responders | L | P4 | ✅ |
-| P6 | Alert dependencies & dedup | M | — | ✅ |
-| P7 | PagerDuty / Opsgenie | S–M | P1 pattern | ✅ |
+| P1 | Native channels (Slack / Discord / Teams) | S | — | 🚀 shipped |
+| P2 | Notification routing (monitor / group / severity) | L | — | 🚀 shipped |
+| P3 | Acknowledge & snooze (inbound) | M | P1 | 🚀 shipped |
+| P4 | Escalation policies (multi-step) | M–L | P2, P3 | 🚀 shipped |
+| P5 | On-call schedules + responders | L | P4 | 🚀 shipped |
+| P6 | Alert dependencies & dedup | M | — | 🚀 shipped |
+| P7 | PagerDuty / Opsgenie | S–M | P1 pattern | 🚀 shipped |
 
 ## P1 — Native channels ✅
 
