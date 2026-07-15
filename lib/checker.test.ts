@@ -32,6 +32,7 @@ let dbDir: string;
 let healthBody: unknown = { status: "UP", components: {} };
 let healthStatus = 200;
 let webhookCalls: Record<string, unknown>[] = [];
+let lastHeaders: Record<string, string> = {};
 
 const ACTUATOR_URL = "http://svc.test/actuator/health"; // http: skips the TLS cert probe
 const WEBHOOK_URL = "https://hooks.test/webhook";
@@ -55,11 +56,12 @@ beforeAll(async () => {
 
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (url: string, init?: { body?: string }) => {
+    vi.fn(async (url: string, init?: { body?: string; headers?: Record<string, string> }) => {
       if (typeof url === "string" && url.includes("/webhook")) {
         webhookCalls.push(JSON.parse(init?.body ?? "{}"));
         return new Response("ok", { status: 200 });
       }
+      lastHeaders = (init?.headers as Record<string, string>) ?? {};
       return new Response(JSON.stringify(healthBody), {
         status: healthStatus,
         headers: { "content-type": "application/json" },
@@ -390,5 +392,25 @@ describe("generic monitor types", () => {
     const down = await createMonitor({ type: "json", statusPath: "$.health", statusUpValue: "green" });
     await runCheck(down);
     expect(await lastStatus(down.id)).toBe("DOWN");
+  });
+});
+
+describe("request auth headers", () => {
+  it("sends Bearer / Basic / custom header / none per authType", async () => {
+    const bearer = await createMonitor({ type: "http", authType: "bearer", authHeaderValue: "tok-123" });
+    await runCheck(bearer);
+    expect(lastHeaders.Authorization).toBe("Bearer tok-123");
+
+    const basic = await createMonitor({ type: "http", authType: "basic", authUsername: "alice", authHeaderValue: "pw" });
+    await runCheck(basic);
+    expect(lastHeaders.Authorization).toBe("Basic " + Buffer.from("alice:pw").toString("base64"));
+
+    const hdr = await createMonitor({ type: "http", authType: "header", authHeaderName: "X-Key", authHeaderValue: "abc" });
+    await runCheck(hdr);
+    expect(lastHeaders["X-Key"]).toBe("abc");
+
+    const none = await createMonitor({ type: "http", authType: "none" });
+    await runCheck(none);
+    expect(lastHeaders.Authorization).toBeUndefined();
   });
 });

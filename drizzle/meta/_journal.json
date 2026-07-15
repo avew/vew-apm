@@ -57,6 +57,13 @@
       "when": 1784025025732,
       "tag": "0007_good_nightshade",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1784092194559,
+      "tag": "0008_curvy_falcon",
+      "breakpoints": true
     }
   ]
 }

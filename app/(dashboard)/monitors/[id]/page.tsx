@@ -278,6 +278,11 @@ export default async function MonitorDetail({
               statusPath: monitor.statusPath,
               statusUpValue: monitor.statusUpValue,
             }}
+            auth={{
+              authType: monitor.authType as "none" | "basic" | "header" | "bearer",
+              authUsername: monitor.authUsername,
+              authHeaderName: monitor.authHeaderName,
+            }}
             thresholds={{
               monitorId: monitor.id,
               current: {

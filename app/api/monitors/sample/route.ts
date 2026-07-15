@@ -2,10 +2,13 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/session";
 import { readBodyCapped } from "@/lib/checker";
+import { buildAuthHeaders } from "@/lib/auth-header";
 
 const Body = z.object({
   url: z.string().url(),
   method: z.enum(["GET", "POST"]).default("GET"),
+  authType: z.string().optional(),
+  authUsername: z.string().optional(),
   authHeaderName: z.string().optional(),
   authHeaderValue: z.string().optional(),
 });
@@ -18,9 +21,16 @@ export async function POST(req: Request) {
   if (!parse.success) {
     return NextResponse.json({ error: "invalid input" }, { status: 400 });
   }
-  const { url, method, authHeaderName, authHeaderValue } = parse.data;
-  const headers: Record<string, string> = { accept: "application/json" };
-  if (authHeaderName && authHeaderValue) headers[authHeaderName] = authHeaderValue;
+  const { url, method } = parse.data;
+  const headers: Record<string, string> = {
+    accept: "application/json",
+    ...buildAuthHeaders({
+      authType: parse.data.authType ?? "none",
+      authUsername: parse.data.authUsername ?? null,
+      authHeaderName: parse.data.authHeaderName ?? null,
+      authHeaderValue: parse.data.authHeaderValue ?? null,
+    }),
+  };
 
   try {
     const res = await fetch(url, {

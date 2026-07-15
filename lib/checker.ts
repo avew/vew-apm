@@ -3,6 +3,7 @@ import { getDb, schema } from "@/lib/db/client";
 import { and, eq, lte, desc, inArray } from "drizzle-orm";
 import { parseHealth, type ParsedHealth } from "./parser";
 import { evaluateHttp, evaluateJson } from "./check-eval";
+import { buildAuthHeaders } from "./auth-header";
 import { isMonitorMuted } from "./maintenance";
 import { dispatch } from "./notifier";
 import { getEffectiveThresholds } from "./alerts";
@@ -117,10 +118,10 @@ export async function readBodyCapped(
 
 async function fetchHealth(monitor: Monitor): Promise<FetchResult> {
   const started = Date.now();
-  const headers: Record<string, string> = { accept: "application/json" };
-  if (monitor.authHeaderName && monitor.authHeaderValue) {
-    headers[monitor.authHeaderName] = monitor.authHeaderValue;
-  }
+  const headers: Record<string, string> = {
+    accept: "application/json",
+    ...buildAuthHeaders(monitor),
+  };
   try {
     const res = await fetch(monitor.url, {
       method: monitor.method,

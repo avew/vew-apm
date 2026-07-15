@@ -28,8 +28,11 @@ export const monitors = sqliteTable(
     statusUpValue: text("status_up_value"), // json: value that means UP
     intervalSeconds: integer("interval_seconds").notNull().default(60),
     timeoutMs: integer("timeout_ms").notNull().default(10000),
-    authHeaderName: text("auth_header_name"),
-    authHeaderValue: text("auth_header_value"),
+    // request auth: "none" | "basic" | "header" | "bearer"
+    authType: text("auth_type").notNull().default("none"),
+    authUsername: text("auth_username"), // basic
+    authHeaderName: text("auth_header_name"), // header: the header name
+    authHeaderValue: text("auth_header_value"), // secret: header value / bearer token / basic password
     enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
     // opt-in: show this monitor on the public /status page
     public: integer("public", { mode: "boolean" }).notNull().default(false),

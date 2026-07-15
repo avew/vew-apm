@@ -15,6 +15,8 @@ const PatchBody = z.object({
   statusUpValue: z.string().max(100).nullable().optional(),
   intervalSeconds: z.number().int().min(10).max(86400).optional(),
   timeoutMs: z.number().int().min(500).max(60000).optional(),
+  authType: z.enum(["none", "basic", "header", "bearer"]).optional(),
+  authUsername: z.string().max(200).nullable().optional(),
   authHeaderName: z.string().max(120).nullable().optional(),
   authHeaderValue: z.string().max(2000).nullable().optional(),
   enabled: z.boolean().optional(),

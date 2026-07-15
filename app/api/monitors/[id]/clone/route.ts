@@ -38,6 +38,8 @@ export async function POST(
       statusUpValue: m.statusUpValue,
       intervalSeconds: m.intervalSeconds,
       timeoutMs: m.timeoutMs,
+      authType: m.authType,
+      authUsername: m.authUsername,
       authHeaderName: m.authHeaderName,
       authHeaderValue: m.authHeaderValue,
       enabled: m.enabled,

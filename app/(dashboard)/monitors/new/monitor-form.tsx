@@ -7,6 +7,8 @@ export function MonitorForm() {
   const [url, setUrl] = useState("");
   const [intervalSeconds, setInterval] = useState(60);
   const [timeoutMs, setTimeoutMs] = useState(10000);
+  const [authType, setAuthType] = useState<"none" | "basic" | "header" | "bearer">("none");
+  const [authUsername, setAuthUsername] = useState("");
   const [authHeaderName, setAuthName] = useState("");
   const [authHeaderValue, setAuthValue] = useState("");
   const [group, setGroup] = useState("");
@@ -32,6 +34,8 @@ export function MonitorForm() {
         body: JSON.stringify({
           url: url.trim(),
           method: "GET",
+          authType,
+          authUsername: authUsername || undefined,
           authHeaderName: authHeaderName || undefined,
           authHeaderValue: authHeaderValue || undefined,
         }),
@@ -69,8 +73,11 @@ export function MonitorForm() {
             url,
             intervalSeconds,
             timeoutMs,
-            authHeaderName: authHeaderName || undefined,
-            authHeaderValue: authHeaderValue || undefined,
+            authType,
+            authUsername: authType === "basic" ? authUsername || undefined : undefined,
+            authHeaderName: authType === "header" ? authHeaderName || undefined : undefined,
+            authHeaderValue:
+              authType !== "none" ? authHeaderValue || undefined : undefined,
             group: group.trim() || undefined,
             type,
             expectStatus: type === "http" ? expectStatus.trim() || undefined : undefined,
@@ -204,24 +211,43 @@ export function MonitorForm() {
           placeholder="e.g. core, billing"
         />
       </Field>
-      <div className="grid grid-cols-2 gap-4">
-        <Field label="Auth header name (optional)">
-          <input
-            className="field-input"
-            value={authHeaderName}
-            onChange={(e) => setAuthName(e.target.value)}
-            placeholder="Authorization"
-          />
+      <Field label="Authentication">
+        <select
+          className="field-input"
+          value={authType}
+          onChange={(e) => setAuthType(e.target.value as typeof authType)}
+        >
+          <option value="none">None</option>
+          <option value="basic">Basic Auth</option>
+          <option value="header">Header Auth</option>
+          <option value="bearer">Bearer / JWT</option>
+        </select>
+      </Field>
+      {authType === "basic" && (
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Username">
+            <input className="field-input" value={authUsername} onChange={(e) => setAuthUsername(e.target.value)} />
+          </Field>
+          <Field label="Password">
+            <input className="field-input" type="password" value={authHeaderValue} onChange={(e) => setAuthValue(e.target.value)} />
+          </Field>
+        </div>
+      )}
+      {authType === "header" && (
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Header name">
+            <input className="field-input" value={authHeaderName} onChange={(e) => setAuthName(e.target.value)} placeholder="X-API-Key" />
+          </Field>
+          <Field label="Header value">
+            <input className="field-input" type="password" value={authHeaderValue} onChange={(e) => setAuthValue(e.target.value)} />
+          </Field>
+        </div>
+      )}
+      {authType === "bearer" && (
+        <Field label="Token">
+          <input className="field-input" type="password" value={authHeaderValue} onChange={(e) => setAuthValue(e.target.value)} placeholder="JWT / bearer token" />
         </Field>
-        <Field label="Auth header value (optional)">
-          <input
-            className="field-input"
-            value={authHeaderValue}
-            onChange={(e) => setAuthValue(e.target.value)}
-            placeholder="Bearer …"
-          />
-        </Field>
-      </div>
+      )}
 
       <div className="border-t border-[var(--border)] pt-3">
         <button

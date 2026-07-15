@@ -23,6 +23,13 @@ export interface CheckConfig {
   statusUpValue: string | null;
 }
 
+// Secret (authHeaderValue) is intentionally omitted — never shipped to the client.
+export interface AuthConfig {
+  authType: "none" | "basic" | "header" | "bearer";
+  authUsername: string | null;
+  authHeaderName: string | null;
+}
+
 export function MonitorActions({
   id,
   enabled,
@@ -31,6 +38,7 @@ export function MonitorActions({
   intervalSeconds,
   group,
   check,
+  auth,
   thresholds,
 }: {
   id: number;
@@ -40,6 +48,7 @@ export function MonitorActions({
   intervalSeconds: number;
   group: string | null;
   check: CheckConfig;
+  auth: AuthConfig;
   thresholds: ThresholdProps;
 }) {
   const router = useRouter();
@@ -138,6 +147,7 @@ export function MonitorActions({
           intervalSeconds={intervalSeconds}
           group={group}
           check={check}
+          auth={auth}
           onClose={() => setEditing(false)}
         />
       )}
@@ -203,6 +213,7 @@ function EditModal({
   intervalSeconds,
   group,
   check,
+  auth,
   onClose,
 }: {
   id: number;
@@ -211,6 +222,7 @@ function EditModal({
   intervalSeconds: number;
   group: string | null;
   check: CheckConfig;
+  auth: AuthConfig;
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -224,6 +236,10 @@ function EditModal({
   const [keyword, setKeyword] = useState(check.keyword ?? "");
   const [statusPath, setStatusPath] = useState(check.statusPath ?? "$.status");
   const [statusUpValue, setStatusUpValue] = useState(check.statusUpValue ?? "");
+  const [authType, setAuthType] = useState(auth.authType);
+  const [authUsername, setAuthUsername] = useState(auth.authUsername ?? "");
+  const [authHeaderName, setAuthHeaderName] = useState(auth.authHeaderName ?? "");
+  const [authValue, setAuthValue] = useState(""); // blank = keep current secret
   const [error, setError] = useState<string | null>(null);
 
   return (
@@ -255,6 +271,11 @@ function EditModal({
                   type === "http" || type === "json" ? keyword.trim() || null : null,
                 statusPath: type === "json" ? statusPath.trim() || null : null,
                 statusUpValue: type === "json" ? statusUpValue.trim() || null : null,
+                authType,
+                authUsername: authType === "basic" ? authUsername.trim() || null : null,
+                authHeaderName: authType === "header" ? authHeaderName.trim() || null : null,
+                // omit when blank so the stored secret is kept
+                ...(authValue.trim() ? { authHeaderValue: authValue.trim() } : {}),
               }),
             });
             if (!res.ok) {
@@ -339,6 +360,50 @@ function EditModal({
               <input className="field-input !mt-1" value={statusUpValue} onChange={(e) => setStatusUpValue(e.target.value)} placeholder="blank = healthy" />
             </label>
           </div>
+        )}
+
+        <label className="block text-sm">
+          <span className="font-medium">Authentication</span>
+          <select
+            className="field-input !mt-1"
+            value={authType}
+            onChange={(e) => setAuthType(e.target.value as AuthConfig["authType"])}
+          >
+            <option value="none">None</option>
+            <option value="basic">Basic Auth</option>
+            <option value="header">Header Auth</option>
+            <option value="bearer">Bearer / JWT</option>
+          </select>
+        </label>
+        {authType === "basic" && (
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block text-sm">
+              <span className="font-medium">Username</span>
+              <input className="field-input !mt-1" value={authUsername} onChange={(e) => setAuthUsername(e.target.value)} />
+            </label>
+            <label className="block text-sm">
+              <span className="font-medium">Password</span>
+              <input className="field-input !mt-1" type="password" value={authValue} onChange={(e) => setAuthValue(e.target.value)} placeholder="leave blank to keep" />
+            </label>
+          </div>
+        )}
+        {authType === "header" && (
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block text-sm">
+              <span className="font-medium">Header name</span>
+              <input className="field-input !mt-1" value={authHeaderName} onChange={(e) => setAuthHeaderName(e.target.value)} placeholder="X-API-Key" />
+            </label>
+            <label className="block text-sm">
+              <span className="font-medium">Header value</span>
+              <input className="field-input !mt-1" type="password" value={authValue} onChange={(e) => setAuthValue(e.target.value)} placeholder="leave blank to keep" />
+            </label>
+          </div>
+        )}
+        {authType === "bearer" && (
+          <label className="block text-sm">
+            <span className="font-medium">Token</span>
+            <input className="field-input !mt-1" type="password" value={authValue} onChange={(e) => setAuthValue(e.target.value)} placeholder="leave blank to keep" />
+          </label>
         )}
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex justify-end gap-2">
