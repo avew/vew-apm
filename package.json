@@ -15,7 +15,10 @@
     "seed": "tsx scripts/seed.ts",
     "seed:incidents": "tsx scripts/seed-incidents.ts",
     "mock": "tsx scripts/mock-service.ts",
-    "mock:watch": "tsx watch scripts/mock-service.ts"
+    "mock:watch": "tsx watch scripts/mock-service.ts",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "e2e:webserver": "rm -f data/e2e.db data/e2e.db-wal data/e2e.db-shm && DATABASE_URL=data/e2e.db node scripts/migrate.cjs && DATABASE_URL=data/e2e.db SESSION_SECRET=e2e-session-secret-e2e-session-secret APM_DISABLE_SCHEDULER=1 next dev -p 3100"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -37,6 +40,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4",
     "@types/bcryptjs": "^2.4.6",
     "@types/better-sqlite3": "^7.6.13",

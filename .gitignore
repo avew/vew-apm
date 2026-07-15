@@ -47,6 +47,13 @@ yarn-error.log*
 /scripts/create_endpoint_change_doc.py
 *.docx
 
+# playwright e2e
+/test-results
+/playwright-report
+/blob-report
+/playwright/.cache
+/e2e/.auth
+
 # vercel
 .vercel
 
