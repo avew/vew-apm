@@ -42,6 +42,9 @@ yarn-error.log*
 .secret_key
 *.db-shm
 
+# internal-only scripts (private registry / infra) — never commit
+/scripts/docker-push.sh
+
 # vercel
 .vercel
 
