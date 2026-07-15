@@ -19,6 +19,17 @@ function preview(kind: string, cfg: Record<string, unknown>): string {
   return "";
 }
 
+// Strip secret fields so the edit form can prefill the rest without them ever
+// reaching the browser.
+const SECRET_KEYS = new Set(["botToken", "apiKey"]);
+function secretFreeConfig(cfg: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(cfg)) {
+    if (!SECRET_KEYS.has(k)) out[k] = v;
+  }
+  return out;
+}
+
 export default async function NotificationsPage() {
   const db = getDb();
   const rows = await db
@@ -39,6 +50,7 @@ export default async function NotificationsPage() {
       kind: c.kind,
       enabled: c.enabled,
       preview: preview(c.kind, cfg),
+      config: secretFreeConfig(cfg),
     };
   });
   return (

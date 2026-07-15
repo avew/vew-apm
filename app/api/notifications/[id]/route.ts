@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getDb, schema } from "@/lib/db/client";
 import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/session";
-import { encryptSecret } from "@/lib/crypto";
+import { encryptSecret, decryptSecret } from "@/lib/crypto";
 
 const Patch = z.object({
   name: z.string().min(1).optional(),
@@ -23,7 +23,21 @@ export async function PATCH(
   }
   const db = getDb();
   const payload: Record<string, unknown> = { ...parse.data };
-  if (payload.config) payload.config = encryptSecret(payload.config);
+  if (payload.config) {
+    // Merge over the existing config so fields the edit form omits (notably
+    // secrets it never received — token/apiKey) are preserved, not wiped.
+    const [existing] = await db
+      .select()
+      .from(schema.notificationChannels)
+      .where(eq(schema.notificationChannels.id, Number(id)));
+    const current = existing
+      ? decryptSecret<Record<string, unknown>>(existing.config)
+      : {};
+    payload.config = encryptSecret({
+      ...current,
+      ...(payload.config as Record<string, unknown>),
+    });
+  }
   await db
     .update(schema.notificationChannels)
     .set(payload as Partial<typeof schema.notificationChannels.$inferInsert>)

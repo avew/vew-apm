@@ -1,17 +1,18 @@
 "use client";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Send, Trash2, Plus, Bell } from "lucide-react";
+import { Send, Trash2, Plus, Bell, Pencil } from "lucide-react";
 import { NotificationModal } from "./notification-modal";
 import { useT } from "@/lib/i18n-client";
 
-/** Secret-free channel shape sent to the client (no config/token/apiKey). */
+/** Secret-free channel shape sent to the client (no token/apiKey). */
 export type SafeChannel = {
   id: number;
   name: string;
   kind: string;
   enabled: boolean;
   preview: string;
+  config: Record<string, unknown>;
 };
 
 export function ChannelsClient({
@@ -26,8 +27,8 @@ export function ChannelsClient({
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-[var(--muted)]">
-          Channels alert on incidents. Unlinked channels broadcast to every
-          monitor; linked ones fire only for their monitors.
+          Channels alert on incidents. Every enabled channel fires for all
+          monitors.
         </p>
         <button
           onClick={() => setOpen(true)}
@@ -61,6 +62,7 @@ function ChannelRow({ channel }: { channel: SafeChannel }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
   return (
     <li className="p-4 flex items-center justify-between gap-2">
       <div className="min-w-0">
@@ -126,6 +128,13 @@ function ChannelRow({ channel }: { channel: SafeChannel }) {
         </button>
         <button
           disabled={pending}
+          onClick={() => setEditing(true)}
+          className="btn btn-ghost !px-2 !py-1 text-xs"
+        >
+          <Pencil className="w-3 h-3" /> Edit
+        </button>
+        <button
+          disabled={pending}
           onClick={() => {
             if (!confirm("Delete channel?")) return;
             start(async () => {
@@ -140,6 +149,9 @@ function ChannelRow({ channel }: { channel: SafeChannel }) {
           <Trash2 className="w-3 h-3" />
         </button>
       </div>
+      {editing && (
+        <NotificationModal edit={channel} onClose={() => setEditing(false)} />
+      )}
     </li>
   );
 }
