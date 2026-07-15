@@ -20,6 +20,12 @@ export const monitors = sqliteTable(
     name: text("name").notNull(),
     url: text("url").notNull(),
     method: text("method").notNull().default("GET"),
+    // "actuator" (Spring health tree) | "http" (2xx + keyword) | "json" (JSON path)
+    type: text("type").notNull().default("actuator"),
+    expectStatus: text("expect_status"), // http: e.g. "2xx" | "200" | "200-204"
+    keyword: text("keyword"), // http/json: body must contain this
+    statusPath: text("status_path"), // json: e.g. "$.status"
+    statusUpValue: text("status_up_value"), // json: value that means UP
     intervalSeconds: integer("interval_seconds").notNull().default(60),
     timeoutMs: integer("timeout_ms").notNull().default(10000),
     authHeaderName: text("auth_header_name"),

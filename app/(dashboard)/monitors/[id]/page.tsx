@@ -271,6 +271,13 @@ export default async function MonitorDetail({
             url={monitor.url}
             intervalSeconds={monitor.intervalSeconds}
             group={monitor.group}
+            check={{
+              type: monitor.type as "actuator" | "http" | "json",
+              expectStatus: monitor.expectStatus,
+              keyword: monitor.keyword,
+              statusPath: monitor.statusPath,
+              statusUpValue: monitor.statusUpValue,
+            }}
             thresholds={{
               monitorId: monitor.id,
               current: {
@@ -343,6 +350,8 @@ export default async function MonitorDetail({
         />
       </section>
 
+      {monitor.type === "actuator" && (
+        <>
       <section className="card p-5">
         <SectionHeader icon={Boxes} title={t("secComponents")} />
         <ComponentTree
@@ -435,6 +444,8 @@ export default async function MonitorDetail({
             ))}
           </ul>
         </section>
+      )}
+        </>
       )}
 
 

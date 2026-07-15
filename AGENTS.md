@@ -27,7 +27,8 @@ persist (`checks` + child rows) → `rules.evaluateRules` (pure) →
 `reconcileIncidents` (open/resolve, respects maintenance) → `notifier.dispatch`.
 
 Key files in `lib/`:
-- `parser.ts` — pure; recursive `components` walk → dot-path statuses, disks, services, propertySources. Unit-tested.
+- `parser.ts` — pure; recursive `components` walk → dot-path statuses, disks, services, propertySources. Unit-tested. Only used by the **actuator** check type.
+- `check-eval.ts` + `jsonpath.ts` — pure evaluators for the generic monitor types. `monitors.type`: `actuator` (default, parse health tree) | `http` (`evaluateHttp`: `statusMatches` + optional `keyword`) | `json` (`evaluateJson`: 2xx + `getByPath(statusPath)` `valueIsUp`). `fetchHealth` branches on `type`; http/json set `parsed=null` so component/disk/eureka rules simply don't fire, while availability/latency/cert still do. `POST /api/monitors/sample` previews an endpoint for the form. `jsonpath.ts` is dot/bracket only (no `$..`/filters).
 - `rules.ts` — **pure** rule engine → `DesiredAlert[]` keyed by `(kind, componentPath)`. Unit-tested. Keep it pure (no DB); the checker feeds it DB-derived inputs (`badComponents`, `eurekaMissing`, history).
 - `alerts.ts` — `EffectiveThresholds` = global `alert_settings` merged with per-monitor overrides (`monitor.x ?? global.x`). Add a new threshold in ALL of: `EffectiveThresholds`, `ALERT_DEFAULTS`, `mergeThresholds`, `getEffectiveThresholds`, schema (`alert_settings` + `monitors` nullable), the two API zod schemas, and both forms.
 - `checker.ts` — orchestration + all DB history queries (service registry sync, sustained-bad components). Also reads TLS cert expiry per https monitor (`fetchCertExpiry`, `node:tls`, `rejectUnauthorized:false`), stored on `monitors.certExpiresAt` and fed to the `cert_expiry` rule as `certDaysLeft` (kept-last on failure so a TLS blip doesn't flap).

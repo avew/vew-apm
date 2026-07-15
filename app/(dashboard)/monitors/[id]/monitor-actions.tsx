@@ -15,6 +15,14 @@ import { useT } from "@/lib/i18n-client";
 
 type ThresholdProps = Omit<React.ComponentProps<typeof OverrideForm>, "onSaved">;
 
+export interface CheckConfig {
+  type: "actuator" | "http" | "json";
+  expectStatus: string | null;
+  keyword: string | null;
+  statusPath: string | null;
+  statusUpValue: string | null;
+}
+
 export function MonitorActions({
   id,
   enabled,
@@ -22,6 +30,7 @@ export function MonitorActions({
   url,
   intervalSeconds,
   group,
+  check,
   thresholds,
 }: {
   id: number;
@@ -30,6 +39,7 @@ export function MonitorActions({
   url: string;
   intervalSeconds: number;
   group: string | null;
+  check: CheckConfig;
   thresholds: ThresholdProps;
 }) {
   const router = useRouter();
@@ -127,6 +137,7 @@ export function MonitorActions({
           url={url}
           intervalSeconds={intervalSeconds}
           group={group}
+          check={check}
           onClose={() => setEditing(false)}
         />
       )}
@@ -191,6 +202,7 @@ function EditModal({
   url,
   intervalSeconds,
   group,
+  check,
   onClose,
 }: {
   id: number;
@@ -198,6 +210,7 @@ function EditModal({
   url: string;
   intervalSeconds: number;
   group: string | null;
+  check: CheckConfig;
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -206,6 +219,11 @@ function EditModal({
   const [u, setU] = useState(url);
   const [iv, setIv] = useState(intervalSeconds);
   const [g, setG] = useState(group ?? "");
+  const [type, setType] = useState(check.type);
+  const [expectStatus, setExpectStatus] = useState(check.expectStatus ?? "");
+  const [keyword, setKeyword] = useState(check.keyword ?? "");
+  const [statusPath, setStatusPath] = useState(check.statusPath ?? "$.status");
+  const [statusUpValue, setStatusUpValue] = useState(check.statusUpValue ?? "");
   const [error, setError] = useState<string | null>(null);
 
   return (
@@ -231,6 +249,12 @@ function EditModal({
                 url: u.trim(),
                 intervalSeconds: iv,
                 group: g.trim() || null,
+                type,
+                expectStatus: type === "http" ? expectStatus.trim() || null : null,
+                keyword:
+                  type === "http" || type === "json" ? keyword.trim() || null : null,
+                statusPath: type === "json" ? statusPath.trim() || null : null,
+                statusUpValue: type === "json" ? statusUpValue.trim() || null : null,
               }),
             });
             if (!res.ok) {
@@ -280,6 +304,42 @@ function EditModal({
             placeholder="none — e.g. core, billing"
           />
         </label>
+        <label className="block text-sm">
+          <span className="font-medium">Check type</span>
+          <select
+            className="field-input !mt-1"
+            value={type}
+            onChange={(e) => setType(e.target.value as CheckConfig["type"])}
+          >
+            <option value="actuator">Spring actuator</option>
+            <option value="http">HTTP (2xx + keyword)</option>
+            <option value="json">JSON (status path)</option>
+          </select>
+        </label>
+        {type === "http" && (
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block text-sm">
+              <span className="font-medium">Expected status</span>
+              <input className="field-input !mt-1" value={expectStatus} onChange={(e) => setExpectStatus(e.target.value)} placeholder="2xx" />
+            </label>
+            <label className="block text-sm">
+              <span className="font-medium">Keyword</span>
+              <input className="field-input !mt-1" value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="optional" />
+            </label>
+          </div>
+        )}
+        {type === "json" && (
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block text-sm">
+              <span className="font-medium">Status path</span>
+              <input className="field-input !mt-1" value={statusPath} onChange={(e) => setStatusPath(e.target.value)} placeholder="$.status" />
+            </label>
+            <label className="block text-sm">
+              <span className="font-medium">UP when =</span>
+              <input className="field-input !mt-1" value={statusUpValue} onChange={(e) => setStatusUpValue(e.target.value)} placeholder="blank = healthy" />
+            </label>
+          </div>
+        )}
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className="btn btn-ghost">

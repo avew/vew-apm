@@ -10,7 +10,40 @@ export function MonitorForm() {
   const [authHeaderName, setAuthName] = useState("");
   const [authHeaderValue, setAuthValue] = useState("");
   const [group, setGroup] = useState("");
+  const [type, setType] = useState<"actuator" | "http" | "json">("actuator");
+  const [expectStatus, setExpectStatus] = useState("");
+  const [keyword, setKeyword] = useState("");
+  const [statusPath, setStatusPath] = useState("$.status");
+  const [statusUpValue, setStatusUpValue] = useState("");
+  const [sample, setSample] = useState<
+    { status?: number; body?: string; error?: string } | null
+  >(null);
+  const [sampling, setSampling] = useState(false);
   const [showOverrides, setShowOverrides] = useState(false);
+
+  async function fetchSample() {
+    if (!url.trim()) return;
+    setSample(null);
+    setSampling(true);
+    try {
+      const res = await fetch("/api/monitors/sample", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          url: url.trim(),
+          method: "GET",
+          authHeaderName: authHeaderName || undefined,
+          authHeaderValue: authHeaderValue || undefined,
+        }),
+      });
+      const j = await res.json();
+      setSample(j.fetchError ? { error: j.fetchError } : { status: j.status, body: j.body });
+    } catch (e) {
+      setSample({ error: String(e) });
+    } finally {
+      setSampling(false);
+    }
+  }
   const [ov, setOv] = useState({
     diskWarnPct: "",
     diskCritPct: "",
@@ -39,6 +72,12 @@ export function MonitorForm() {
             authHeaderName: authHeaderName || undefined,
             authHeaderValue: authHeaderValue || undefined,
             group: group.trim() || undefined,
+            type,
+            expectStatus: type === "http" ? expectStatus.trim() || undefined : undefined,
+            keyword:
+              type === "http" || type === "json" ? keyword.trim() || undefined : undefined,
+            statusPath: type === "json" ? statusPath.trim() || undefined : undefined,
+            statusUpValue: type === "json" ? statusUpValue.trim() || undefined : undefined,
             diskWarnPct: ovNum(ov.diskWarnPct),
             diskCritPct: ovNum(ov.diskCritPct),
             downForMinutes: ovNum(ov.downForMinutes),
@@ -98,6 +137,65 @@ export function MonitorForm() {
           />
         </Field>
       </div>
+      <Field label="Check type">
+        <select
+          className="field-input"
+          value={type}
+          onChange={(e) => setType(e.target.value as typeof type)}
+        >
+          <option value="actuator">Spring actuator (parse health tree)</option>
+          <option value="http">HTTP (up = 2xx, optional keyword)</option>
+          <option value="json">JSON (status from a path you pick)</option>
+        </select>
+      </Field>
+
+      {type === "http" && (
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Expected status (optional)">
+            <input className="field-input" value={expectStatus} onChange={(e) => setExpectStatus(e.target.value)} placeholder="2xx · or 200 · or 200-204" />
+          </Field>
+          <Field label="Body must contain (optional)">
+            <input className="field-input" value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="e.g. pong" />
+          </Field>
+        </div>
+      )}
+
+      {type === "json" && (
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Status path">
+            <input className="field-input" value={statusPath} onChange={(e) => setStatusPath(e.target.value)} placeholder="$.status" />
+          </Field>
+          <Field label="UP when value = (blank = healthy words)">
+            <input className="field-input" value={statusUpValue} onChange={(e) => setStatusUpValue(e.target.value)} placeholder="UP / ok / green …" />
+          </Field>
+          <Field label="Body must contain (optional)">
+            <input className="field-input" value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="optional" />
+          </Field>
+        </div>
+      )}
+
+      {type !== "actuator" && (
+        <div className="rounded-lg border border-[var(--border)] p-3">
+          <button type="button" onClick={fetchSample} disabled={!url.trim() || sampling} className="btn btn-ghost text-sm">
+            {sampling ? "Fetching…" : "Fetch sample"}
+          </button>
+          {sample && (
+            <div className="mt-2 text-xs">
+              {sample.error ? (
+                <p className="text-red-600">Failed: {sample.error}</p>
+              ) : (
+                <>
+                  <p className="text-[var(--muted)]">HTTP {sample.status}</p>
+                  <pre className="mt-1 max-h-64 overflow-auto rounded bg-black/[0.04] dark:bg-white/[0.06] p-2 font-mono text-[11px] whitespace-pre-wrap break-all">
+                    {sample.body}
+                  </pre>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       <Field label="Group (optional)">
         <input
           className="field-input"
