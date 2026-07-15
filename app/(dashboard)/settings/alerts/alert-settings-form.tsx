@@ -148,8 +148,9 @@ export function AlertSettingsForm({ initial }: { initial: Values }) {
           <span>Re-send a still-open critical alert every (minutes)</span>
           <input className={cls} type="number" min={0} max={10080} value={v.renotifyMinutes} onChange={num("renotifyMinutes")} />
           <span className="text-xs text-[var(--muted)]">
-            Reminders keep firing until the incident resolves. A warning that
-            escalates to critical re-alerts immediately. 0 = notify once only.
+            Reminders fire for <strong>critical</strong> incidents only, until
+            they resolve. A warning notifies once and never repeats — but if it
+            escalates to critical it re-alerts immediately. 0 = notify once only.
           </span>
         </label>
       </fieldset>
