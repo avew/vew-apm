@@ -97,17 +97,23 @@ export const componentStatuses = sqliteTable(
   (t) => [index("comp_check_path_idx").on(t.checkId, t.path)],
 );
 
-export const diskSnapshots = sqliteTable("disk_snapshots", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  checkId: integer("check_id")
-    .notNull()
-    .references(() => checks.id, { onDelete: "cascade" }),
-  diskPath: text("disk_path"),
-  totalBytes: integer("total_bytes"),
-  freeBytes: integer("free_bytes"),
-  usedPct: real("used_pct"),
-  thresholdBytes: integer("threshold_bytes"),
-});
+export const diskSnapshots = sqliteTable(
+  "disk_snapshots",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    checkId: integer("check_id")
+      .notNull()
+      .references(() => checks.id, { onDelete: "cascade" }),
+    diskPath: text("disk_path"),
+    totalBytes: integer("total_bytes"),
+    freeBytes: integer("free_bytes"),
+    usedPct: real("used_pct"),
+    thresholdBytes: integer("threshold_bytes"),
+  },
+  // Join key for "latest disk per monitor" (dashboard) and the 24h disk chart.
+  // Without it those queries full-SCAN disk_snapshots per candidate check.
+  (t) => [index("disk_check_idx").on(t.checkId)],
+);
 
 export const serviceSnapshots = sqliteTable(
   "service_snapshots",
