@@ -50,7 +50,7 @@ disk usage as a time series, and can't track Eureka registry membership.
   every enabled channel fires for all monitors. Per-channel config (incl. Resend
   API key); no env var needed. Delivery retries with backoff; a still-open
   critical incident re-notifies every `renotifyMinutes` and escalates
-  warning → critical.
+  warning → critical. Webhook JSON schema + examples: **[WEBHOOK.md](WEBHOOK.md)**.
 - **Maintenance windows** — global or per-monitor, one-off or recurring, with
   timezone selector; suppress alerts without affecting uptime %.
 - **Public status page** — opt-in per monitor, no-login `/status` (off by
