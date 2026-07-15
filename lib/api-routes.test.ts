@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, vi } from "vitest";
 import Database from "better-sqlite3";
+import { eq } from "drizzle-orm";
 import { readFileSync, readdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -22,6 +23,11 @@ let loadStatusPageSettings: typeof import("@/lib/status").loadStatusPageSettings
 let getDb: typeof import("@/lib/db/client").getDb;
 let schema: typeof import("@/lib/db/client").schema;
 let isEncrypted: typeof import("@/lib/crypto").isEncrypted;
+let decryptSecret: typeof import("@/lib/crypto").decryptSecret;
+let notifPatch: (
+  req: Request,
+  ctx: { params: Promise<{ id: string }> },
+) => Promise<Response>;
 
 const ADMIN = { username: "admin", password: "password123" };
 
@@ -54,7 +60,8 @@ beforeAll(async () => {
   ({ loadAlertSettings } = await import("@/lib/alerts"));
   ({ loadStatusPageSettings } = await import("@/lib/status"));
   ({ getDb, schema } = await import("@/lib/db/client"));
-  ({ isEncrypted } = await import("@/lib/crypto"));
+  ({ isEncrypted, decryptSecret } = await import("@/lib/crypto"));
+  ({ PATCH: notifPatch } = await import("@/app/api/notifications/[id]/route"));
 
   const { createInitialAdmin } = await import("@/lib/auth");
   await createInitialAdmin(ADMIN.username, ADMIN.password);
@@ -144,5 +151,40 @@ describe("PATCH /api/status-page", () => {
     const s = await loadStatusPageSettings();
     expect(s.enabled).toBe(true);
     expect(s.title).toBe("Ops Status");
+  });
+});
+
+describe("PATCH /api/notifications/[id] — config merge", () => {
+  it("keeps the secret when the edit omits it, updates other fields", async () => {
+    // create a telegram channel with a secret token
+    const created = await notifPOST(
+      jsonReq("http://t/api/notifications", {
+        kind: "telegram",
+        name: "tg-edit",
+        config: { botToken: "123:SECRET", chatId: -100 },
+      }),
+    );
+    const { channel } = await created.json();
+    const id = channel.id as number;
+
+    // edit: change chatId only, no botToken (as the masked edit form does)
+    const res = await notifPatch(
+      new Request(`http://t/api/notifications/${id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: "tg-edit-2", config: { chatId: -999 } }),
+      }),
+      { params: Promise.resolve({ id: String(id) }) },
+    );
+    expect(res.status).toBe(200);
+
+    const [row] = await getDb()
+      .select()
+      .from(schema.notificationChannels)
+      .where(eq(schema.notificationChannels.id, id));
+    expect(row.name).toBe("tg-edit-2");
+    const cfg = decryptSecret<Record<string, unknown>>(row.config);
+    expect(cfg.botToken).toBe("123:SECRET"); // preserved
+    expect(cfg.chatId).toBe(-999); // updated
   });
 });
