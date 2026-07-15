@@ -43,39 +43,58 @@ function Toggle({
   );
 }
 
-export function NotificationModal({ onClose }: { onClose: () => void }) {
+export interface EditChannel {
+  id: number;
+  kind: string;
+  name: string;
+  enabled: boolean;
+  config: Record<string, unknown>;
+}
+
+export function NotificationModal({
+  onClose,
+  edit,
+}: {
+  onClose: () => void;
+  edit?: EditChannel;
+}) {
   const router = useRouter();
+  const isEdit = !!edit;
+  const cfg = edit?.config ?? {};
+  const str = (v: unknown) => (typeof v === "string" ? v : v != null ? String(v) : "");
+
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
-  const [kind, setKind] = useState<Kind>("telegram");
-  const [name, setName] = useState("");
-  // telegram
+  const [kind, setKind] = useState<Kind>((edit?.kind as Kind) ?? "telegram");
+  const [name, setName] = useState(edit?.name ?? "");
+  // telegram (botToken is secret — always starts blank in edit)
   const [botToken, setBotToken] = useState("");
   const [showToken, setShowToken] = useState(false);
-  const [chatId, setChatId] = useState("");
-  const [threadId, setThreadId] = useState("");
-  const [serverUrl, setServerUrl] = useState("");
-  const [silent, setSilent] = useState(false);
-  const [protect, setProtect] = useState(false);
-  const [useTemplate, setUseTemplate] = useState(false);
-  const [template, setTemplate] = useState("");
+  const [chatId, setChatId] = useState(str(cfg.chatId));
+  const [threadId, setThreadId] = useState(str(cfg.messageThreadId));
+  const [serverUrl, setServerUrl] = useState(str(cfg.serverUrl));
+  const [silent, setSilent] = useState(!!cfg.silent);
+  const [protect, setProtect] = useState(!!cfg.protect);
+  const [useTemplate, setUseTemplate] = useState(!!cfg.template);
+  const [template, setTemplate] = useState(str(cfg.template));
   // webhook
-  const [url, setUrl] = useState("");
-  // email
+  const [url, setUrl] = useState(str(cfg.url));
+  // email (apiKey is secret — always starts blank in edit)
   const [emailApiKey, setEmailApiKey] = useState("");
   const [showApiKey, setShowApiKey] = useState(false);
-  const [emailFrom, setEmailFrom] = useState("");
-  const [emailTo, setEmailTo] = useState("");
+  const [emailFrom, setEmailFrom] = useState(str(cfg.from));
+  const [emailTo, setEmailTo] = useState(Array.isArray(cfg.to) ? cfg.to.join(", ") : "");
   // common
-  const [enabled, setEnabled] = useState(true);
+  const [enabled, setEnabled] = useState(edit?.enabled ?? true);
 
   function buildConfig(): Record<string, unknown> | null {
     if (kind === "telegram") {
-      if (!botToken.trim() || !chatId.trim()) return null;
+      // secret required only when creating; on edit a blank token keeps the old one
+      if (!chatId.trim() || (!isEdit && !botToken.trim())) return null;
       const n = Number(chatId);
       return {
-        botToken: botToken.trim(),
+        ...(botToken.trim() ? { botToken: botToken.trim() } : {}),
         chatId: Number.isFinite(n) && chatId.trim() !== "" ? n : chatId.trim(),
         ...(threadId.trim() ? { messageThreadId: threadId.trim() } : {}),
         ...(serverUrl.trim() ? { serverUrl: serverUrl.trim() } : {}),
@@ -90,8 +109,12 @@ export function NotificationModal({ onClose }: { onClose: () => void }) {
     }
     // email
     const to = emailTo.split(",").map((s) => s.trim()).filter(Boolean);
-    if (!emailApiKey.trim() || !emailFrom.trim() || to.length === 0) return null;
-    return { apiKey: emailApiKey.trim(), from: emailFrom.trim(), to };
+    if (!emailFrom.trim() || to.length === 0 || (!isEdit && !emailApiKey.trim())) return null;
+    return {
+      ...(emailApiKey.trim() ? { apiKey: emailApiKey.trim() } : {}),
+      from: emailFrom.trim(),
+      to,
+    };
   }
 
   function doTest() {
@@ -121,16 +144,18 @@ export function NotificationModal({ onClose }: { onClose: () => void }) {
     const config = buildConfig();
     if (!config) return setMsg({ type: "err", text: "Fill the required fields." });
     start(async () => {
-      const res = await fetch("/api/notifications", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          kind,
-          name: name.trim(),
-          enabled,
-          config,
-        }),
-      });
+      const res = await fetch(
+        isEdit ? `/api/notifications/${edit!.id}` : "/api/notifications",
+        {
+          method: isEdit ? "PATCH" : "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(
+            isEdit
+              ? { name: name.trim(), enabled, config }
+              : { kind, name: name.trim(), enabled, config },
+          ),
+        },
+      );
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         setMsg({ type: "err", text: j.error ?? "Save failed" });
@@ -155,7 +180,9 @@ export function NotificationModal({ onClose }: { onClose: () => void }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Set Up Notification</h2>
+          <h2 className="text-lg font-semibold">
+            {isEdit ? "Edit notification" : "Set Up Notification"}
+          </h2>
           <button
             onClick={onClose}
             className="text-[var(--muted)] hover:text-[var(--foreground)]"
@@ -170,6 +197,7 @@ export function NotificationModal({ onClose }: { onClose: () => void }) {
             <select
               className={cls}
               value={kind}
+              disabled={isEdit}
               onChange={(e) => setKind(e.target.value as Kind)}
             >
               <option value="telegram">Telegram</option>
@@ -197,6 +225,7 @@ export function NotificationModal({ onClose }: { onClose: () => void }) {
                     className={`${cls} pr-10`}
                     type={showToken ? "text" : "password"}
                     value={botToken}
+                    placeholder={isEdit ? "leave blank to keep current" : ""}
                     onChange={(e) => setBotToken(e.target.value)}
                   />
                   <button
@@ -314,7 +343,7 @@ export function NotificationModal({ onClose }: { onClose: () => void }) {
                     type={showApiKey ? "text" : "password"}
                     value={emailApiKey}
                     onChange={(e) => setEmailApiKey(e.target.value)}
-                    placeholder="re_xxxxxxxxxxxxxxxx"
+                    placeholder={isEdit ? "leave blank to keep current" : "re_xxxxxxxxxxxxxxxx"}
                   />
                   <button
                     type="button"
