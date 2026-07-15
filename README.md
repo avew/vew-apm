@@ -145,12 +145,28 @@ troubleshooting: **[DOCKER.md](DOCKER.md)**.
 | `npm run dev` | Dev server + in-process scheduler |
 | `npm run build` / `start` | Production build / serve |
 | `npm test` | Vitest — units (parser, rules, crypto, retry, status) + checker & API-route integration |
+| `npm run test:e2e` | Playwright E2E (`e2e/`) — boots the app on a throwaway DB, drives real browser flows |
+| `npm run test:e2e:ui` | Playwright in UI mode |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run db:push` | Apply schema to SQLite |
 | `npm run db:studio` | Drizzle Studio |
 | `npm run seed` | Seed one monitor at the local fixture |
 | `npm run seed:incidents` | Seed a demo monitor with 24h history + incidents |
 | `npm run mock` / `mock:watch` | Standalone mock actuator service |
+
+### End-to-end tests (Playwright)
+
+```bash
+npx playwright install chromium   # one-time: browser binary
+npm run test:e2e                  # boots the app + runs e2e/
+```
+
+Playwright ([playwright.config.ts](playwright.config.ts)) starts the app on port
+3100 against a **throwaway SQLite DB** (wiped + migrated each run) with the
+scheduler disabled, so runs are deterministic and need no real secrets. A setup
+project creates the admin and signs in once; the saved session is reused by the
+specs in [e2e/](e2e/) (health, dashboard, login redirect, monitor creation). CI
+runs the same suite on every PR.
 
 ## How checks run
 
