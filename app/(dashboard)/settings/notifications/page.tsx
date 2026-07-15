@@ -21,7 +21,7 @@ function preview(kind: string, cfg: Record<string, unknown>): string {
 
 // Strip secret fields so the edit form can prefill the rest without them ever
 // reaching the browser.
-const SECRET_KEYS = new Set(["botToken", "apiKey"]);
+const SECRET_KEYS = new Set(["botToken", "apiKey", "authHeaderValue"]);
 function secretFreeConfig(cfg: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(cfg)) {
