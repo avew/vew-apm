@@ -214,6 +214,20 @@ async function fetchHealth(monitor: Monitor): Promise<FetchResult> {
   }
 }
 
+/**
+ * Order-independent fingerprint of a service set, for delta storage. Two checks
+ * with the same (source, name, instanceCount) triples — in any order — produce
+ * the same string, so an unchanged set is detected and not re-snapshotted.
+ */
+export function serviceSetSignature(
+  rows: { source: string; serviceName: string; instanceCount: number }[],
+): string {
+  return rows
+    .map((r) => `${r.source}|${r.serviceName}|${r.instanceCount}`)
+    .sort()
+    .join(";");
+}
+
 function persistCheck(
   monitor: Monitor,
   result: FetchResult,
@@ -271,16 +285,48 @@ function persistCheck(
           .run();
       }
       if (services.length > 0) {
-        tx.insert(schema.serviceSnapshots)
-          .values(
-            services.map((s) => ({
-              checkId,
-              source: s.source,
-              serviceName: s.serviceName,
-              instanceCount: s.instanceCount,
-            })),
+        // Delta storage. Discovered services rarely change between checks but
+        // dominate row volume (~1 row per service, every check). Only snapshot
+        // when the set changed vs the last stored snapshot; the detail page
+        // reads the latest *stored* set, so unchanged checks need no rows.
+        // (No rule reads this table — availability/eureka come from the parse
+        // and the monitor_services registry — so delta storage is display-only.)
+        const [prevCp] = tx
+          .select({ id: schema.serviceSnapshots.checkId })
+          .from(schema.serviceSnapshots)
+          .innerJoin(
+            schema.checks,
+            eq(schema.serviceSnapshots.checkId, schema.checks.id),
           )
-          .run();
+          .where(eq(schema.checks.monitorId, monitor.id))
+          .orderBy(desc(schema.serviceSnapshots.checkId))
+          .limit(1)
+          .all();
+        let changed = true;
+        if (prevCp) {
+          const prevRows = tx
+            .select({
+              source: schema.serviceSnapshots.source,
+              serviceName: schema.serviceSnapshots.serviceName,
+              instanceCount: schema.serviceSnapshots.instanceCount,
+            })
+            .from(schema.serviceSnapshots)
+            .where(eq(schema.serviceSnapshots.checkId, prevCp.id))
+            .all();
+          changed = serviceSetSignature(prevRows) !== serviceSetSignature(services);
+        }
+        if (changed) {
+          tx.insert(schema.serviceSnapshots)
+            .values(
+              services.map((s) => ({
+                checkId,
+                source: s.source,
+                serviceName: s.serviceName,
+                instanceCount: s.instanceCount,
+              })),
+            )
+            .run();
+        }
       }
     }
 

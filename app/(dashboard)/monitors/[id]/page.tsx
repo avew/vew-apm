@@ -105,11 +105,15 @@ async function loadDiskHistory(monitorId: number) {
 
 async function loadServices(monitorId: number) {
   const db = getDb();
+  // Services are delta-stored (snapshotted only when the set changes), so the
+  // current set is the most recent check that actually has service rows — not
+  // necessarily the latest check.
   const [latest] = await db
-    .select({ id: schema.checks.id })
-    .from(schema.checks)
+    .select({ id: schema.serviceSnapshots.checkId })
+    .from(schema.serviceSnapshots)
+    .innerJoin(schema.checks, eq(schema.serviceSnapshots.checkId, schema.checks.id))
     .where(eq(schema.checks.monitorId, monitorId))
-    .orderBy(desc(schema.checks.checkedAt))
+    .orderBy(desc(schema.serviceSnapshots.checkId))
     .limit(1);
   if (!latest) return [];
   return db

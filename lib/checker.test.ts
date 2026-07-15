@@ -414,3 +414,53 @@ describe("request auth headers", () => {
     expect(lastHeaders.Authorization).toBeUndefined();
   });
 });
+
+describe("service snapshot delta storage", () => {
+  const eurekaBody = (apps: Record<string, number>) => ({
+    status: "UP",
+    components: {
+      discoveryComposite: {
+        status: "UP",
+        components: {
+          eureka: { status: "UP", details: { applications: apps } },
+        },
+      },
+    },
+  });
+
+  function serviceRows(monitorId: number) {
+    return getDb()
+      .select({ checkId: schema.serviceSnapshots.checkId })
+      .from(schema.serviceSnapshots)
+      .innerJoin(schema.checks, eq(schema.serviceSnapshots.checkId, schema.checks.id))
+      .where(eq(schema.checks.monitorId, monitorId));
+  }
+
+  it("snapshots once, skips unchanged checks, re-snapshots on change", async () => {
+    healthBody = eurekaBody({ "SVC-A": 1, "SVC-B": 2 });
+    const m = await createMonitor();
+
+    await runCheck(m); // baseline → snapshot
+    let rows = await serviceRows(m.id);
+    expect(rows).toHaveLength(2);
+    expect(new Set(rows.map((r) => r.checkId)).size).toBe(1);
+
+    await runCheck(m); // identical → NO new snapshot
+    rows = await serviceRows(m.id);
+    expect(rows).toHaveLength(2);
+    expect(new Set(rows.map((r) => r.checkId)).size).toBe(1);
+
+    healthBody = eurekaBody({ "SVC-A": 1, "SVC-B": 3 }); // instance count changed
+    await runCheck(m); // → new snapshot
+    rows = await serviceRows(m.id);
+    expect(rows).toHaveLength(4);
+    expect(new Set(rows.map((r) => r.checkId)).size).toBe(2);
+
+    // 3 checks recorded, but only 2 carry service rows (delta).
+    const checks = await getDb()
+      .select()
+      .from(schema.checks)
+      .where(eq(schema.checks.monitorId, m.id));
+    expect(checks).toHaveLength(3);
+  });
+});
