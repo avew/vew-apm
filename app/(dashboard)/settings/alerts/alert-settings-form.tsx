@@ -15,7 +15,6 @@ interface Values {
   certWarnDays: number;
   certCritDays: number;
   sloTarget: number;
-  retentionDays: number;
 }
 
 const cls = "field-input";
@@ -162,18 +161,6 @@ export function AlertSettingsForm({ initial }: { initial: Values }) {
           <input className={cls} type="number" min={0} max={100} step={0.01} value={v.sloTarget} onChange={num("sloTarget")} />
           <span className="text-xs text-[var(--muted)]">
             Drives the SLO report (Reports tab) and per-monitor error budgets.
-          </span>
-        </label>
-      </fieldset>
-
-      <fieldset className="space-y-3">
-        <legend className="text-sm font-medium mb-1">Data retention</legend>
-        <label className="block text-sm">
-          <span>Keep check history for (days)</span>
-          <input className={cls} type="number" min={0} max={3650} value={v.retentionDays} onChange={num("retentionDays")} />
-          <span className="text-xs text-[var(--muted)]">
-            Older checks (and their component/disk/service snapshots) are pruned
-            hourly. 0 = keep forever.
           </span>
         </label>
       </fieldset>

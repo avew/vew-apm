@@ -4,7 +4,10 @@ import * as schema from "./schema";
 import path from "node:path";
 import { existsSync, mkdirSync } from "node:fs";
 
+type Sqlite = InstanceType<typeof Database>;
+
 let cached: ReturnType<typeof drizzle> | null = null;
+let cachedSqlite: Sqlite | null = null;
 
 function resolvePath(): string {
   const raw = process.env.DATABASE_URL ?? "./data/apm.db";
@@ -24,8 +27,18 @@ export function getDb() {
   // in-process scheduler and web requests both write, and WAL only lets one
   // writer at a time, so brief writer-vs-writer contention is expected.
   sqlite.pragma("busy_timeout = 5000");
+  cachedSqlite = sqlite;
   cached = drizzle(sqlite, { schema });
   return cached;
+}
+
+/**
+ * The raw better-sqlite3 connection, for maintenance ops that don't fit the ORM
+ * (PRAGMA reads, VACUUM, WAL checkpoint). Shares the single cached connection.
+ */
+export function getSqlite(): Sqlite {
+  if (!cachedSqlite) getDb();
+  return cachedSqlite!;
 }
 
 export { schema };
