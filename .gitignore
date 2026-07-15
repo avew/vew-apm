@@ -42,6 +42,11 @@ yarn-error.log*
 .secret_key
 *.db-shm
 
+# internal-only / operator-local scripts + ad-hoc docs (never commit)
+/scripts/docker-push.sh
+/scripts/create_endpoint_change_doc.py
+*.docx
+
 # vercel
 .vercel
 

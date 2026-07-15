@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { User, SlidersHorizontal, Bell, Wrench, Palette, Globe } from "lucide-react";
+import { User, SlidersHorizontal, Bell, Wrench, Palette, Globe, Database } from "lucide-react";
 import { useT } from "@/lib/i18n-client";
 import type { MsgKey } from "@/lib/i18n";
 
@@ -17,6 +17,7 @@ const TABS: {
   { href: "/settings/notifications", key: "navNotifications", icon: Bell },
   { href: "/settings/maintenance", key: "navMaintenance", icon: Wrench },
   { href: "/settings/status", key: "navStatusPage", icon: Globe },
+  { href: "/settings/data", key: "navData", icon: Database },
 ];
 
 export function SettingsNav() {
