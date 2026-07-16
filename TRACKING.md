@@ -15,7 +15,7 @@ _Last updated: 2026-07-16 · branch `feat/notify-native-channels`_
 | P2 | Notification routing (monitor / group / severity) | L | — | ✅ |
 | P3 | Acknowledge & snooze (inbound) | M | P1 | ✅ |
 | P4 | Escalation policies (multi-step) | M–L | P2, P3 | ✅ |
-| P5 | On-call schedules + responders | L | P4 | ⬜ |
+| P5 | On-call schedules + responders | L | P4 | ✅ |
 | P6 | Alert dependencies & dedup | M | — | ⬜ |
 | P7 | PagerDuty / Opsgenie | S–M | P1 pattern | ⬜ |
 
@@ -90,11 +90,17 @@ three kinds. 175 tests green · typecheck + build clean.
 > to **critical** incidents. Per-monitor policy + warning-level escalation are future
 > refinements (the alerts.ts override pattern supports adding `monitors.escalationPolicyId` later).
 
-## P5 — On-call schedules ⬜
-- [ ] Schema: `responders` + `oncall_schedules` (rrule) + `db:push`
-- [ ] Resolve "who's on call now" (reuse maintenance next-occurrence)
-- [ ] Escalation step targets a schedule
-- [ ] Tests
+## P5 — On-call schedules ✅
+- [x] Schema: `responders`, `oncall_schedules`, `oncall_members`; `escalation_steps.channelId` now nullable + `scheduleId`; migration `drizzle/0015_curved_lilandra.sql` (hand-fixed the table-rebuild INSERT to not select the new column from the old table)
+- [x] Pure rotation `currentOnCallIndex()` — `lib/oncall.ts` (+ 7 tests, negative-safe)
+- [x] Escalation step targets a channel **or** a schedule; `resolveStepChannel()` resolves the on-call responder at fire time — `lib/checker.ts`
+- [x] CRUD API: `/api/responders`, `/api/oncall-schedules` (+ `/[id]`, `/members`, `/members/[memberId]`); step POST accepts channelId xor scheduleId
+- [x] Settings UI: `Settings › On-call` (responders + schedules + rotation, shows who's on call now); escalation step form gained a channel/schedule target toggle
+- [x] Tests: rotation (7) + reconcile integration (escalates via schedule to the on-call responder's channel)
+
+> **Decision:** simple modulo rotation (rotationDays + anchor + ordered members),
+> not rrule — round-robin isn't a calendar recurrence. Per-schedule overrides
+> (manual "who's on call right now" override, per-shift handoff) are a future refinement.
 
 ## P6 — Alert dependencies & dedup ⬜
 - [ ] Schema: `monitors.dependsOn` (self-reference) + `db:push`

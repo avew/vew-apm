@@ -412,6 +412,52 @@ describe("renotify + escalation", () => {
     }
   });
 
+  it("escalates to the on-call responder's channel via a schedule", async () => {
+    const m = await createMonitor({ renotifyMinutes: 0 });
+    healthBody = { status: "UP", components: { redis: { status: "DOWN" } } };
+    await runCheck(m);
+    const incs = await incidentsFor(m.id);
+
+    const db = getDb();
+    const [channel] = await db.select().from(schema.notificationChannels);
+    const [resp] = await db
+      .insert(schema.responders)
+      .values({ name: "Alice", channelId: channel.id })
+      .returning();
+    const [sched] = await db
+      .insert(schema.oncallSchedules)
+      .values({ name: "rot", rotationDays: 7, anchorAt: new Date() })
+      .returning();
+    const [policy] = await db
+      .insert(schema.escalationPolicies)
+      .values({ name: "sched-pol", active: true })
+      .returning();
+    try {
+      await db
+        .insert(schema.oncallMembers)
+        .values({ scheduleId: sched.id, responderId: resp.id, position: 0 });
+      await db
+        .insert(schema.escalationSteps)
+        .values({ policyId: policy.id, afterMinutes: 15, scheduleId: sched.id });
+      await db
+        .update(schema.incidents)
+        .set({ startedAt: new Date(Date.now() - 20 * 60_000) })
+        .where(eq(schema.incidents.id, incs[0].id));
+      webhookCalls = [];
+
+      await runCheck(m); // escalation resolves the schedule → Alice's channel
+      expect(webhookCalls.length).toBeGreaterThanOrEqual(1);
+    } finally {
+      await db
+        .delete(schema.escalationPolicies)
+        .where(eq(schema.escalationPolicies.id, policy.id));
+      await db
+        .delete(schema.oncallSchedules)
+        .where(eq(schema.oncallSchedules.id, sched.id));
+      await db.delete(schema.responders).where(eq(schema.responders.id, resp.id));
+    }
+  });
+
   it("re-alerts immediately when a warning escalates to critical", async () => {
     const m = await createMonitor({ renotifyMinutes: 0 }); // renotify off; escalation still fires
     healthBody = {

@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { User, SlidersHorizontal, Bell, Wrench, Palette, Globe, Database, ArrowUpCircle } from "lucide-react";
+import { User, SlidersHorizontal, Bell, Wrench, Palette, Globe, Database, ArrowUpCircle, CalendarClock } from "lucide-react";
 import { useT } from "@/lib/i18n-client";
 import type { MsgKey } from "@/lib/i18n";
 
@@ -16,6 +16,7 @@ const TABS: {
   { href: "/settings/alerts", key: "navAlerts", icon: SlidersHorizontal },
   { href: "/settings/notifications", key: "navNotifications", icon: Bell },
   { href: "/settings/escalation", key: "navEscalation", icon: ArrowUpCircle },
+  { href: "/settings/oncall", key: "navOncall", icon: CalendarClock },
   { href: "/settings/maintenance", key: "navMaintenance", icon: Wrench },
   { href: "/settings/status", key: "navStatusPage", icon: Globe },
   { href: "/settings/data", key: "navData", icon: Database },

@@ -289,9 +289,47 @@ export const escalationSteps = sqliteTable("escalation_steps", {
     .references(() => escalationPolicies.id, { onDelete: "cascade" }),
   // minutes after the incident opened at which this step fires
   afterMinutes: integer("after_minutes").notNull(),
+  // a step targets EITHER a fixed channel OR an on-call schedule (P5), which
+  // resolves to whoever is on call at fire time. Exactly one is set.
+  channelId: integer("channel_id").references(() => notificationChannels.id, {
+    onDelete: "cascade",
+  }),
+  scheduleId: integer("schedule_id").references(() => oncallSchedules.id, {
+    onDelete: "cascade",
+  }),
+  createdAt: ts("created_at"),
+});
+
+// On-call (P5). A responder is a person mapped to their contact channel. A
+// schedule rotates over an ordered list of responders every `rotationDays`,
+// counting from `anchorAt`. An escalation step can target a schedule instead of
+// a fixed channel, resolving to the current on-call responder's channel.
+export const responders = sqliteTable("responders", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
   channelId: integer("channel_id")
     .notNull()
     .references(() => notificationChannels.id, { onDelete: "cascade" }),
+  createdAt: ts("created_at"),
+});
+
+export const oncallSchedules = sqliteTable("oncall_schedules", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  rotationDays: integer("rotation_days").notNull().default(7),
+  anchorAt: integer("anchor_at", { mode: "timestamp" }).notNull(),
+  createdAt: ts("created_at"),
+});
+
+export const oncallMembers = sqliteTable("oncall_members", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  scheduleId: integer("schedule_id")
+    .notNull()
+    .references(() => oncallSchedules.id, { onDelete: "cascade" }),
+  responderId: integer("responder_id")
+    .notNull()
+    .references(() => responders.id, { onDelete: "cascade" }),
+  position: integer("position").notNull().default(0),
   createdAt: ts("created_at"),
 });
 
@@ -390,6 +428,9 @@ export type NotificationChannel = typeof notificationChannels.$inferSelect;
 export type ChannelRoute = typeof channelRoutes.$inferSelect;
 export type EscalationPolicy = typeof escalationPolicies.$inferSelect;
 export type EscalationStep = typeof escalationSteps.$inferSelect;
+export type Responder = typeof responders.$inferSelect;
+export type OncallSchedule = typeof oncallSchedules.$inferSelect;
+export type OncallMember = typeof oncallMembers.$inferSelect;
 export type MaintenanceWindow = typeof maintenanceWindows.$inferSelect;
 export type AlertSettings = typeof alertSettings.$inferSelect;
 export type MonitorService = typeof monitorServices.$inferSelect;

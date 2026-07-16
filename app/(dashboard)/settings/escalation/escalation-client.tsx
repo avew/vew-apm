@@ -8,7 +8,8 @@ export type StepRow = {
   id: number;
   policyId: number;
   afterMinutes: number;
-  channelId: number;
+  channelId: number | null;
+  scheduleId: number | null;
 };
 export type ChannelLite = {
   id: number;
@@ -16,6 +17,7 @@ export type ChannelLite = {
   kind: string;
   enabled: boolean;
 };
+export type ScheduleLite = { id: number; name: string };
 
 const cls = "field-input !mt-1";
 
@@ -29,10 +31,12 @@ export function EscalationClient({
   policies,
   steps,
   channels,
+  schedules,
 }: {
   policies: PolicyRow[];
   steps: StepRow[];
   channels: ChannelLite[];
+  schedules: ScheduleLite[];
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -89,6 +93,7 @@ export function EscalationClient({
             policy={p}
             steps={steps.filter((s) => s.policyId === p.id)}
             channels={channels}
+            schedules={schedules}
             pending={pending}
             start={start}
           />
@@ -102,22 +107,36 @@ function PolicyCard({
   policy,
   steps,
   channels,
+  schedules,
   pending,
   start,
 }: {
   policy: PolicyRow;
   steps: StepRow[];
   channels: ChannelLite[];
+  schedules: ScheduleLite[];
   pending: boolean;
   start: (fn: () => Promise<void>) => void;
 }) {
   const router = useRouter();
   const [afterMinutes, setAfterMinutes] = useState("15");
+  const [targetType, setTargetType] = useState<"channel" | "schedule">("channel");
   const [channelId, setChannelId] = useState<string>(
     channels[0] ? String(channels[0].id) : "",
   );
+  const [scheduleId, setScheduleId] = useState<string>(
+    schedules[0] ? String(schedules[0].id) : "",
+  );
   const channelName = (id: number) =>
     channels.find((c) => c.id === id)?.name ?? `channel #${id}`;
+  const scheduleName = (id: number) =>
+    schedules.find((s) => s.id === id)?.name ?? `schedule #${id}`;
+  const describeTarget = (s: StepRow) =>
+    s.channelId != null
+      ? channelName(s.channelId)
+      : s.scheduleId != null
+        ? `on-call: ${scheduleName(s.scheduleId)}`
+        : "—";
 
   function setActive(active: boolean) {
     start(async () => {
@@ -140,12 +159,21 @@ function PolicyCard({
 
   function addStep() {
     const mins = Number(afterMinutes);
-    if (!Number.isFinite(mins) || mins < 0 || !channelId) return;
+    if (!Number.isFinite(mins) || mins < 0) return;
+    const target =
+      targetType === "channel"
+        ? channelId
+          ? { channelId: Number(channelId) }
+          : null
+        : scheduleId
+          ? { scheduleId: Number(scheduleId) }
+          : null;
+    if (!target) return;
     start(async () => {
       await fetch(`/api/escalation-policies/${policy.id}/steps`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ afterMinutes: mins, channelId: Number(channelId) }),
+        body: JSON.stringify({ afterMinutes: mins, ...target }),
       });
       router.refresh();
     });
@@ -197,7 +225,7 @@ function PolicyCard({
               className="flex items-center justify-between gap-2 text-xs"
             >
               <span className="font-mono">
-                {i + 1}. {fmtDelay(s.afterMinutes)} → {channelName(s.channelId)}
+                {i + 1}. {fmtDelay(s.afterMinutes)} → {describeTarget(s)}
               </span>
               <button
                 type="button"
@@ -215,32 +243,64 @@ function PolicyCard({
         <p className="text-xs text-[var(--muted)]">No steps yet.</p>
       )}
 
-      {channels.length > 0 && (
-        <div className="flex items-end gap-2 border-t border-[var(--border)] pt-3">
+      {(channels.length > 0 || schedules.length > 0) && (
+        <div className="flex flex-wrap items-end gap-2 border-t border-[var(--border)] pt-3">
           <label className="block text-xs">
             <span className="font-medium">After (minutes)</span>
             <input
               type="number"
               min={0}
-              className={`${cls} w-28`}
+              className={`${cls} w-24`}
               value={afterMinutes}
               onChange={(e) => setAfterMinutes(e.target.value)}
             />
           </label>
-          <label className="block text-xs flex-1">
-            <span className="font-medium">Notify channel</span>
+          <label className="block text-xs">
+            <span className="font-medium">Notify</span>
             <select
               className={cls}
-              value={channelId}
-              onChange={(e) => setChannelId(e.target.value)}
+              value={targetType}
+              onChange={(e) => setTargetType(e.target.value as "channel" | "schedule")}
             >
-              {channels.map((c) => (
-                <option key={c.id} value={String(c.id)}>
-                  {c.name} ({c.kind}){c.enabled ? "" : " — disabled"}
-                </option>
-              ))}
+              <option value="channel" disabled={channels.length === 0}>
+                Channel
+              </option>
+              <option value="schedule" disabled={schedules.length === 0}>
+                On-call schedule
+              </option>
             </select>
           </label>
+          {targetType === "channel" ? (
+            <label className="block text-xs flex-1 min-w-40">
+              <span className="font-medium">Channel</span>
+              <select
+                className={cls}
+                value={channelId}
+                onChange={(e) => setChannelId(e.target.value)}
+              >
+                {channels.map((c) => (
+                  <option key={c.id} value={String(c.id)}>
+                    {c.name} ({c.kind}){c.enabled ? "" : " — disabled"}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <label className="block text-xs flex-1 min-w-40">
+              <span className="font-medium">Schedule</span>
+              <select
+                className={cls}
+                value={scheduleId}
+                onChange={(e) => setScheduleId(e.target.value)}
+              >
+                {schedules.map((s) => (
+                  <option key={s.id} value={String(s.id)}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <button
             type="button"
             disabled={pending}

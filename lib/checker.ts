@@ -1,6 +1,6 @@
 import tls from "node:tls";
 import { getDb, schema } from "@/lib/db/client";
-import { and, eq, lte, desc, inArray } from "drizzle-orm";
+import { and, asc, eq, lte, desc, inArray } from "drizzle-orm";
 import { parseHealth, type ParsedHealth } from "./parser";
 import { evaluateHttp, evaluateJson } from "./check-eval";
 import { parsePromText, selectSample, type PromSample } from "./prom-parse";
@@ -8,6 +8,7 @@ import { buildAuthHeaders } from "./auth-header";
 import { isMonitorMuted } from "./maintenance";
 import { dispatch, dispatchToChannel } from "./notifier";
 import { dueEscalationSteps, type EscStep } from "./escalation";
+import { currentOnCallIndex } from "./oncall";
 import { getEffectiveThresholds } from "./alerts";
 import {
   evaluateRules,
@@ -581,10 +582,52 @@ async function loadActiveEscalationSteps(): Promise<EscStep[]> {
     .select({
       afterMinutes: schema.escalationSteps.afterMinutes,
       channelId: schema.escalationSteps.channelId,
+      scheduleId: schema.escalationSteps.scheduleId,
     })
     .from(schema.escalationSteps)
     .where(eq(schema.escalationSteps.policyId, policy.id));
   return steps;
+}
+
+/**
+ * Resolve an escalation step to the channel id it should page right now: its
+ * fixed channel, or the on-call responder for its schedule (P5). Null if the
+ * schedule is empty / missing.
+ */
+async function resolveStepChannel(
+  step: EscStep,
+  now: Date,
+): Promise<number | null> {
+  if (step.channelId != null) return step.channelId;
+  if (step.scheduleId == null) return null;
+  const db = getDb();
+  const [sched] = await db
+    .select({
+      rotationDays: schema.oncallSchedules.rotationDays,
+      anchorAt: schema.oncallSchedules.anchorAt,
+    })
+    .from(schema.oncallSchedules)
+    .where(eq(schema.oncallSchedules.id, step.scheduleId));
+  if (!sched) return null;
+  const members = await db
+    .select({
+      channelId: schema.responders.channelId,
+      position: schema.oncallMembers.position,
+    })
+    .from(schema.oncallMembers)
+    .innerJoin(
+      schema.responders,
+      eq(schema.oncallMembers.responderId, schema.responders.id),
+    )
+    .where(eq(schema.oncallMembers.scheduleId, step.scheduleId))
+    .orderBy(asc(schema.oncallMembers.position), asc(schema.oncallMembers.id));
+  const idx = currentOnCallIndex(
+    members.length,
+    sched.rotationDays,
+    sched.anchorAt.getTime(),
+    now.getTime(),
+  );
+  return idx == null ? null : members[idx].channelId;
 }
 
 async function reconcileIncidents(
@@ -790,7 +833,9 @@ async function reconcileIncidents(
             .set({ escalationStep: firedCount })
             .where(eq(schema.incidents.id, row.id));
           for (const step of due) {
-            await dispatchToChannel(step.channelId, {
+            const targetChannel = await resolveStepChannel(step, now);
+            if (targetChannel == null) continue; // empty schedule / missing channel
+            await dispatchToChannel(targetChannel, {
               kind: "down",
               monitor,
               incidentId: row.id,

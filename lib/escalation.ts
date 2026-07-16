@@ -7,7 +7,9 @@
 
 export interface EscStep {
   afterMinutes: number;
-  channelId: number;
+  // a step targets a fixed channel or an on-call schedule (resolved at fire time)
+  channelId?: number | null;
+  scheduleId?: number | null;
 }
 
 export interface DueResult {

@@ -4,10 +4,16 @@ import { getDb, schema } from "@/lib/db/client";
 import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/session";
 
-const Body = z.object({
-  afterMinutes: z.number().int().min(0).max(10080), // up to a week
-  channelId: z.number().int().positive(),
-});
+const Body = z
+  .object({
+    afterMinutes: z.number().int().min(0).max(10080), // up to a week
+    channelId: z.number().int().positive().optional(),
+    scheduleId: z.number().int().positive().optional(),
+  })
+  // a step targets exactly one of: a fixed channel, or an on-call schedule
+  .refine((b) => (b.channelId == null) !== (b.scheduleId == null), {
+    message: "provide exactly one of channelId or scheduleId",
+  });
 
 export async function POST(
   req: Request,
@@ -29,12 +35,22 @@ export async function POST(
   if (!policy) {
     return NextResponse.json({ error: "policy not found" }, { status: 404 });
   }
-  const [channel] = await db
-    .select({ id: schema.notificationChannels.id })
-    .from(schema.notificationChannels)
-    .where(eq(schema.notificationChannels.id, parse.data.channelId));
-  if (!channel) {
-    return NextResponse.json({ error: "channel not found" }, { status: 400 });
+  if (parse.data.channelId != null) {
+    const [channel] = await db
+      .select({ id: schema.notificationChannels.id })
+      .from(schema.notificationChannels)
+      .where(eq(schema.notificationChannels.id, parse.data.channelId));
+    if (!channel) {
+      return NextResponse.json({ error: "channel not found" }, { status: 400 });
+    }
+  } else if (parse.data.scheduleId != null) {
+    const [sched] = await db
+      .select({ id: schema.oncallSchedules.id })
+      .from(schema.oncallSchedules)
+      .where(eq(schema.oncallSchedules.id, parse.data.scheduleId));
+    if (!sched) {
+      return NextResponse.json({ error: "schedule not found" }, { status: 400 });
+    }
   }
 
   const [row] = await db
@@ -42,7 +58,8 @@ export async function POST(
     .values({
       policyId,
       afterMinutes: parse.data.afterMinutes,
-      channelId: parse.data.channelId,
+      channelId: parse.data.channelId ?? null,
+      scheduleId: parse.data.scheduleId ?? null,
     })
     .returning();
   return NextResponse.json({ step: row }, { status: 201 });

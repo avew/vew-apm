@@ -5,6 +5,7 @@ import {
   type PolicyRow,
   type StepRow,
   type ChannelLite,
+  type ScheduleLite,
 } from "./escalation-client";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +26,7 @@ export default async function EscalationPage() {
       policyId: schema.escalationSteps.policyId,
       afterMinutes: schema.escalationSteps.afterMinutes,
       channelId: schema.escalationSteps.channelId,
+      scheduleId: schema.escalationSteps.scheduleId,
     })
     .from(schema.escalationSteps)
     .orderBy(asc(schema.escalationSteps.afterMinutes));
@@ -37,6 +39,13 @@ export default async function EscalationPage() {
     })
     .from(schema.notificationChannels)
     .orderBy(asc(schema.notificationChannels.name));
+  const oncallSchedules: ScheduleLite[] = await db
+    .select({
+      id: schema.oncallSchedules.id,
+      name: schema.oncallSchedules.name,
+    })
+    .from(schema.oncallSchedules)
+    .orderBy(asc(schema.oncallSchedules.name));
 
   return (
     <div className="space-y-6">
@@ -47,7 +56,12 @@ export default async function EscalationPage() {
           channels on a time ladder. One policy is active at a time.
         </p>
       </div>
-      <EscalationClient policies={policies} steps={steps} channels={channels} />
+      <EscalationClient
+        policies={policies}
+        steps={steps}
+        channels={channels}
+        schedules={oncallSchedules}
+      />
     </div>
   );
 }
