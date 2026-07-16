@@ -14,60 +14,24 @@ disk usage as a time series, and can't track Eureka registry membership.
 
 ## Features
 
-- **Per-monitor polling** at a configurable interval; latency, HTTP status, and
-  raw body captured each check.
-- **Check types** — `actuator` (parse the Spring health tree), `http` (up on a
-  2xx / expected status + optional body keyword), `json` (up from a value at
-  a JSON path you pick), or `prometheus` (scrape a metrics endpoint like
-  `/actuator/prometheus` and alert on specific metrics — see below). A "Fetch
-  sample" button previews the endpoint so you can see the shape first.
-- **Prometheus metrics** — attach metrics to **any** monitor: add one or more
-  **endpoints** (metric sources — e.g. a microservice's `/actuator/prometheus`,
-  several per monitor) and **metric rules** (metric name + label matchers +
-  operator + warn/critical threshold, each targeting an endpoint). Every check
-  scrapes the endpoints, charts each metric over time on the monitor's page, and
-  opens a `metric` incident on a breach — the monitor's own UP/DOWN is unaffected.
-- **Request auth** — per monitor: None, Basic, Header (custom name/value), or
-  Bearer/JWT. Sent with every check (and the sample fetch).
-- **Actuator parser** — recursive walk of `components` into dot-paths, plus disk
-  (`total/free/used%`), Eureka apps, discovery services, health probes, and
-  config property sources.
-- **Threshold rule engine** with warning/critical severities:
-  - Disk usage % (warn / critical)
-  - Availability — DOWN sustained ≥ N minutes (debounced)
-  - Latency — p95 over the last N checks (spikes an average would hide); the
-    monitor page also shows p50 / p95 / p99
-  - Component `DOWN` (critical) / `OUT_OF_SERVICE` (warning), grace-debounced
-  - Service registry — a service that was seen but disappears past a grace window
-  - TLS certificate expiry — warn/critical days before (or after) `notAfter`, for https monitors
-  - Global defaults in **Settings → Alerts**, optional **per-monitor overrides**.
-- **Service registry** — auto-seeds every service on first sight; marks `DOWN`
-  when a tracked service vanishes, `STALE` when the endpoint is unreachable.
-- **Monitor groups** — an optional label per monitor; the dashboard and public
-  status page section monitors by group (named groups first, ungrouped last).
-- **Health probes** panel — plain-language liveness/readiness with K8s consequence.
-- **SLO report** — per-monitor uptime vs a target (global default + per-monitor
-  override) over 7/30/90 days, with error-budget consumption.
-- **Incidents** — global page + per-monitor log, ongoing count badge, auto-resolve.
-- **Announcements** — operator-posted incidents with an update timeline
-  (Investigating → Identified → Monitoring → Resolved), shown on the public
-  status page alongside the auto-detected ones.
-- **Notifications** — global channels (webhook / email via Resend / Telegram);
-  webhooks support request auth (None / Basic / Header / Bearer);
-  every enabled channel fires for all monitors. Per-channel config (incl. Resend
-  API key); no env var needed. Delivery retries with backoff; a still-open
-  critical incident re-notifies every `renotifyMinutes` and escalates
-  warning → critical.
-- **Maintenance windows** — global or per-monitor, one-off or recurring, with
-  timezone selector; suppress alerts without affecting uptime %.
-- **Public status page** — opt-in per monitor, no-login `/status` (off by
-  default). Shows status + a selectable 24h/7d/90d uptime bar + a generic
-  incident timeline + active/upcoming **scheduled-maintenance** banners; never
-  exposes URLs, components, disk, service names, or raw reasons (private
-  monitors' maintenance windows are hidden too).
-- **Appearance** — light/dark/auto theme, heartbeat-bar style, language
-  (EN/ID/ZH/MS), staged behind Save/Cancel.
-- **Basic auth** — single admin, bcrypt, signed JWT cookie.
+Highlights — see **[FEATURES.md](FEATURES.md)** for the full catalogue.
+
+- **Check types** — `actuator` (Spring health tree), `http`, `json` (value at a
+  path), or `prometheus` (scrape a metrics endpoint); optional per-monitor request
+  auth (Basic / Header / Bearer).
+- **Prometheus metrics on any monitor** — add one or more endpoints (metric sources)
+  + threshold rules; each metric is charted over time and a breach raises a `metric`
+  incident (health/UP-DOWN stays independent).
+- **Threshold rule engine** (warn / critical) — disk %, availability, latency p95,
+  component down, service-registry drop, TLS-cert expiry, and metric rules; global
+  defaults + per-monitor overrides.
+- **Incidents** with re-notify + escalation; **notifications** to global channels
+  (webhook / email / Telegram) with request auth and encrypted secrets.
+- **Status page** (opt-in, no-login), **announcements**, **SLO report**,
+  **maintenance windows**, **monitor groups**, **service registry**, health probes.
+- **Operations** — data retention + on-demand VACUUM, own `GET /api/health` liveness
+  (Docker `HEALTHCHECK`), in-process scheduler.
+- **Appearance** — light/dark/auto, language (EN/ID/ZH/MS); single-admin auth.
 
 ## Stack
 
