@@ -630,6 +630,24 @@ async function resolveStepChannel(
   return idx == null ? null : members[idx].channelId;
 }
 
+/** True if the parent monitor currently has an open availability incident (P6). */
+async function isDependencyDown(parentId: number | null): Promise<boolean> {
+  if (parentId == null) return false;
+  const db = getDb();
+  const [open] = await db
+    .select({ id: schema.incidents.id })
+    .from(schema.incidents)
+    .where(
+      and(
+        eq(schema.incidents.monitorId, parentId),
+        eq(schema.incidents.kind, "availability"),
+        eq(schema.incidents.resolved, false),
+      ),
+    )
+    .limit(1);
+  return !!open;
+}
+
 async function reconcileIncidents(
   monitor: Monitor,
   result: FetchResult,
@@ -641,6 +659,12 @@ async function reconcileIncidents(
   const db = getDb();
   const thresholds = await getEffectiveThresholds(monitor);
   const escalationSteps = await loadActiveEscalationSteps();
+  // Dependency suppression (P6): if this monitor's parent is currently down
+  // (has an open availability incident), suppress this monitor's incidents so a
+  // downed dependency does not fan out into an alert storm. Transitive by
+  // construction — a suppressed parent still keeps its own incident open.
+  const depSuppressed = await isDependencyDown(monitor.dependsOn);
+  const suppressed = muted || depSuppressed;
   const window = Math.max(thresholds.latencyWindow, thresholds.downForMinutes + 2, 10);
   const recentChecks = await loadRecentChecks(monitor.id, window);
 
@@ -717,12 +741,12 @@ async function reconcileIncidents(
         reason: a.reason,
         startedAt: now,
         resolved: false,
-        suppressed: muted,
-        lastNotifiedAt: muted ? undefined : now,
-        notifyCount: muted ? 0 : 1,
+        suppressed,
+        lastNotifiedAt: suppressed ? undefined : now,
+        notifyCount: suppressed ? 0 : 1,
       })
       .returning({ id: schema.incidents.id });
-    if (!muted) {
+    if (!suppressed) {
       await dispatch({
         kind: "down",
         monitor,
@@ -780,7 +804,7 @@ async function reconcileIncidents(
         !snoozed &&
         row.lastNotifiedAt != null &&
         now.getTime() - row.lastNotifiedAt.getTime() >= renotifyMs;
-      const notify = !row.suppressed && (escalated || dueRenotify);
+      const notify = !row.suppressed && !depSuppressed && (escalated || dueRenotify);
       await db
         .update(schema.incidents)
         .set({
@@ -816,6 +840,7 @@ async function reconcileIncidents(
       if (
         escalationSteps.length > 0 &&
         !row.suppressed &&
+        !depSuppressed &&
         !acked &&
         !snoozed &&
         still.severity === "critical"

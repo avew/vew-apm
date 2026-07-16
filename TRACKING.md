@@ -16,7 +16,7 @@ _Last updated: 2026-07-16 · branch `feat/notify-native-channels`_
 | P3 | Acknowledge & snooze (inbound) | M | P1 | ✅ |
 | P4 | Escalation policies (multi-step) | M–L | P2, P3 | ✅ |
 | P5 | On-call schedules + responders | L | P4 | ✅ |
-| P6 | Alert dependencies & dedup | M | — | ⬜ |
+| P6 | Alert dependencies & dedup | M | — | ✅ |
 | P7 | PagerDuty / Opsgenie | S–M | P1 pattern | ⬜ |
 
 ## P1 — Native channels ✅
@@ -102,11 +102,17 @@ three kinds. 175 tests green · typecheck + build clean.
 > not rrule — round-robin isn't a calendar recurrence. Per-schedule overrides
 > (manual "who's on call right now" override, per-shift handoff) are a future refinement.
 
-## P6 — Alert dependencies & dedup ⬜
-- [ ] Schema: `monitors.dependsOn` (self-reference) + `db:push`
-- [ ] Suppress child incident while parent is down
-- [ ] Cross-monitor alert grouping
-- [ ] Tests
+## P6 — Alert dependencies & dedup ✅
+- [x] Schema: `monitors.dependsOn` self-reference (`onDelete: set null`); migration `drizzle/0016_eager_typhoid_mary.sql`
+- [x] `isDependencyDown()` — parent has an open availability incident → suppress; wired into `reconcileIncidents` (open path + renotify + escalation gates) — `lib/checker.ts`
+- [x] Transitive by construction (a suppressed parent keeps its own incident open, so grandchildren see it down)
+- [x] API: `dependsOn` on monitor create + edit (self-dependency rejected on PATCH)
+- [x] UI: "Depends on" select on the create-monitor form
+- [x] Test: child incidents suppressed + no notify while parent down
+
+> **Deferred:** editing an existing monitor's parent via the UI (API/clone already
+> support it); cross-monitor alert **grouping/dedup** into a single digest (the
+> suppression half of P6 is the higher-value piece and is done).
 
 ## P7 — PagerDuty / Opsgenie ⬜
 - [ ] Sender mapping events → Events API v2

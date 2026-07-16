@@ -32,6 +32,7 @@ const PatchBody = z.object({
   serviceGraceSeconds: z.number().int().min(0).max(86400).nullable().optional(),
   componentGraceSeconds: z.number().int().min(0).max(86400).nullable().optional(),
   renotifyMinutes: z.number().int().min(0).max(10080).nullable().optional(),
+  dependsOn: z.number().int().positive().nullable().optional(),
 });
 
 async function getId(ctx: { params: Promise<{ id: string }> }) {
@@ -62,6 +63,13 @@ export async function PATCH(
   const parse = PatchBody.safeParse(await req.json().catch(() => ({})));
   if (!parse.success) {
     return NextResponse.json({ error: "invalid input" }, { status: 400 });
+  }
+  // A monitor can't depend on itself (would suppress its own incidents forever).
+  if (parse.data.dependsOn === id) {
+    return NextResponse.json(
+      { error: "a monitor cannot depend on itself" },
+      { status: 400 },
+    );
   }
   const db = getDb();
   const updates = parse.data;

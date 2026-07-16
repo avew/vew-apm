@@ -1,0 +1,1 @@
+ALTER TABLE `monitors` ADD `depends_on` integer REFERENCES monitors(id);

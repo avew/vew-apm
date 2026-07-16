@@ -91,6 +91,10 @@ Full catalogue of what Vew APM does. For a quick overview see the
 - **On-call schedules** — responders map a person to a contact channel; a schedule
   rotates over them every N days. An escalation step targeting a schedule pages
   whoever is on call at fire time. Managed under Settings › On-call.
+- **Alert dependencies** — a monitor can depend on a parent; while the parent has an
+  open availability incident, the child's incidents are suppressed (no alert flood
+  for everything behind a downed gateway). Transitive across a chain. Set on the
+  create-monitor form.
 - Create / edit / test each channel from the UI.
 
 ## Status page & reporting

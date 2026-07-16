@@ -5,6 +5,7 @@ import {
   real,
   index,
   uniqueIndex,
+  type AnySQLiteColumn,
 } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 
@@ -40,6 +41,13 @@ export const monitors = sqliteTable(
     // optional grouping label for the dashboard + status page ("group" is a
     // SQL reserved word, so the column is group_name)
     group: text("group_name"),
+    // optional parent monitor (P6): while the parent has an open availability
+    // incident, this monitor's incidents are suppressed to avoid an alert flood
+    // for everything behind a downed dependency.
+    dependsOn: integer("depends_on").references(
+      (): AnySQLiteColumn => monitors.id,
+      { onDelete: "set null" },
+    ),
     nextCheckAt: ts("next_check_at"),
     lastStatus: text("last_status"),
     // Alert threshold overrides (null = inherit global alert_settings)

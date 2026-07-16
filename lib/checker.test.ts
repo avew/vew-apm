@@ -482,6 +482,27 @@ describe("renotify + escalation", () => {
     });
   });
 
+  it("suppresses a child monitor's incidents while its parent is down (P6)", async () => {
+    const parent = await createMonitor({});
+    const child = await createMonitor({ dependsOn: parent.id });
+    // Parent is down: an open availability incident is the "down" signal.
+    await getDb().insert(schema.incidents).values({
+      monitorId: parent.id,
+      kind: "availability",
+      severity: "critical",
+      startedAt: new Date(),
+      resolved: false,
+    });
+    webhookCalls = [];
+    healthBody = { status: "UP", components: { redis: { status: "DOWN" } } };
+
+    await runCheck(child); // child trips, but its parent is down → suppressed
+    const incs = await incidentsFor(child.id);
+    expect(incs.length).toBeGreaterThanOrEqual(1);
+    expect(incs.every((i) => i.suppressed)).toBe(true);
+    expect(webhookCalls).toHaveLength(0);
+  });
+
   it("never re-notifies a suppressed (maintenance) incident", async () => {
     const m = await createMonitor({ renotifyMinutes: 5 });
     await getDb()
