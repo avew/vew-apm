@@ -16,7 +16,9 @@ import {
   createCipheriv,
   createDecipheriv,
   createHash,
+  createHmac,
   randomBytes,
+  timingSafeEqual,
 } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -50,6 +52,24 @@ function loadKey(): Buffer {
 function getKey(): Buffer {
   const g = globalThis as unknown as Record<symbol, Buffer | undefined>;
   return (g[KEY_CACHE] ??= loadKey());
+}
+
+/**
+ * Sign a string with the instance key (HMAC-SHA256, base64url). Used for
+ * unguessable action links (e.g. incident acknowledge) that must work without a
+ * session — the link carries `signToken("ack:<id>")` and the handler re-signs to
+ * verify. Reuses the same key resolution as the secret cipher.
+ */
+export function signToken(data: string): string {
+  return createHmac("sha256", getKey()).update(data).digest("base64url");
+}
+
+/** Constant-time verification of a token produced by signToken. */
+export function verifyToken(data: string, token: string): boolean {
+  const expected = Buffer.from(signToken(data));
+  const given = Buffer.from(token);
+  if (expected.length !== given.length) return false;
+  return timingSafeEqual(expected, given);
 }
 
 /** True if a stored value is already ciphertext produced by encryptSecret. */

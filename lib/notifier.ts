@@ -11,11 +11,14 @@ import { decryptSecret } from "./crypto";
 import type { Monitor } from "@/lib/db/schema";
 import type { Severity, AlertKind } from "./rules";
 import { channelShouldFire, type RouteRule } from "./routing";
+import { ackUrl } from "./ack";
 
 export type Event =
   | {
       kind: "down";
       monitor: Monitor;
+      // incident id, used to build the acknowledge link (P3)
+      incidentId?: number;
       componentPath: string | null;
       startedAt: Date;
       severity: Severity;
@@ -50,9 +53,11 @@ function renderText(ev: Event): { subject: string; body: string } {
     const openedFor = ev.repeat
       ? `\nOpen for: ${Math.round((Date.now() - ev.startedAt.getTime()) / 60000)}m`
       : "";
+    const ack = ev.incidentId != null ? ackUrl(ev.incidentId) : null;
+    const ackLine = ack ? `\nAcknowledge: ${ack}` : "";
     return {
       subject: `[Vew APM][${tag}] ${ev.alertKind} — ${ev.monitor.name} (${scope})`,
-      body: `${icon} *${ev.monitor.name}* alert: *${ev.alertKind}* (${ev.severity})\nURL: ${ev.monitor.url}\nScope: ${scope}\n${ev.reason ? `Detail: ${ev.reason}\n` : ""}Started: ${ev.startedAt.toISOString()}${openedFor}`,
+      body: `${icon} *${ev.monitor.name}* alert: *${ev.alertKind}* (${ev.severity})\nURL: ${ev.monitor.url}\nScope: ${scope}\n${ev.reason ? `Detail: ${ev.reason}\n` : ""}Started: ${ev.startedAt.toISOString()}${openedFor}${ackLine}`,
     };
   }
   return {
@@ -129,6 +134,8 @@ export async function dispatch(ev: Event): Promise<void> {
     componentPath: ev.componentPath,
     repeat: ev.kind === "down" ? ev.repeat ?? false : false,
     escalated: ev.kind === "down" ? ev.escalated ?? false : false,
+    ackUrl:
+      ev.kind === "down" && ev.incidentId != null ? ackUrl(ev.incidentId) : null,
     startedAt: ev.startedAt.toISOString(),
     endedAt: ev.kind === "resolved" ? ev.endedAt.toISOString() : null,
   };

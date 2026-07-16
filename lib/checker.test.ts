@@ -310,6 +310,68 @@ describe("renotify + escalation", () => {
     expect(webhookCalls).toHaveLength(0);
   });
 
+  it("does not re-notify an acknowledged incident even after the cadence elapses", async () => {
+    const m = await createMonitor({ renotifyMinutes: 5 });
+    healthBody = { status: "UP", components: { redis: { status: "DOWN" } } };
+    await runCheck(m); // open → notify #1
+    const incs = await incidentsFor(m.id);
+    await getDb()
+      .update(schema.incidents)
+      .set({
+        lastNotifiedAt: new Date(Date.now() - 6 * 60_000), // overdue
+        ackedAt: new Date(),
+        ackedBy: "link",
+      })
+      .where(eq(schema.incidents.id, incs[0].id));
+    webhookCalls = [];
+
+    await runCheck(m); // still DOWN but acknowledged → silent
+    const after = await incidentsFor(m.id);
+    expect(after[0].notifyCount).toBe(1);
+    expect(webhookCalls).toHaveLength(0);
+  });
+
+  it("does not re-notify a snoozed incident before the snooze expires", async () => {
+    const m = await createMonitor({ renotifyMinutes: 5 });
+    healthBody = { status: "UP", components: { redis: { status: "DOWN" } } };
+    await runCheck(m);
+    const incs = await incidentsFor(m.id);
+    await getDb()
+      .update(schema.incidents)
+      .set({
+        lastNotifiedAt: new Date(Date.now() - 6 * 60_000), // overdue
+        snoozedUntil: new Date(Date.now() + 60 * 60_000), // 1h out
+      })
+      .where(eq(schema.incidents.id, incs[0].id));
+    webhookCalls = [];
+
+    await runCheck(m); // snoozed → silent
+    expect((await incidentsFor(m.id))[0].notifyCount).toBe(1);
+    expect(webhookCalls).toHaveLength(0);
+  });
+
+  it("escalation clears an existing ack and re-alerts", async () => {
+    const m = await createMonitor({ renotifyMinutes: 0 });
+    healthBody = {
+      status: "UP",
+      components: { redis: { status: "OUT_OF_SERVICE" } },
+    };
+    await runCheck(m); // open as warning
+    let incs = await incidentsFor(m.id);
+    await getDb()
+      .update(schema.incidents)
+      .set({ ackedAt: new Date(), ackedBy: "link" })
+      .where(eq(schema.incidents.id, incs[0].id));
+    webhookCalls = [];
+
+    healthBody = { status: "UP", components: { redis: { status: "DOWN" } } };
+    await runCheck(m); // escalate → critical, ack cleared, re-alert
+    incs = await incidentsFor(m.id);
+    expect(incs[0].severity).toBe("critical");
+    expect(incs[0].ackedAt).toBeNull();
+    expect(webhookCalls).toHaveLength(1);
+  });
+
   it("re-alerts immediately when a warning escalates to critical", async () => {
     const m = await createMonitor({ renotifyMinutes: 0 }); // renotify off; escalation still fires
     healthBody = {

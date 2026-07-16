@@ -80,6 +80,10 @@ Full catalogue of what Vew APM does. For a quick overview see the
 - **Secrets encrypted at rest** (AES-256-GCM); never shipped to the client. Masked on
   edit (blank = keep).
 - **Delivery retries** with backoff (network / 429 / 5xx retry; permanent 4xx stops).
+- **Acknowledge / snooze** — every down alert carries a signed, session-free link;
+  clicking it (Acknowledge / Snooze 1h / Snooze 4h) stops reminder notifications
+  until the incident recovers or the snooze ends. Escalation to critical clears an
+  ack and re-alerts. Requires `APP_BASE_URL` for the link to be included.
 - Create / edit / test each channel from the UI.
 
 ## Status page & reporting

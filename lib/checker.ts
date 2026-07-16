@@ -642,24 +642,28 @@ async function reconcileIncidents(
   // Open new alerts.
   for (const [key, a] of desired) {
     if (open.has(key)) continue;
-    await db.insert(schema.incidents).values({
-      monitorId: monitor.id,
-      componentPath: a.componentPath ?? undefined,
-      kind: a.kind,
-      severity: a.severity,
-      metricValue: a.metricValue ?? undefined,
-      threshold: a.threshold ?? undefined,
-      reason: a.reason,
-      startedAt: now,
-      resolved: false,
-      suppressed: muted,
-      lastNotifiedAt: muted ? undefined : now,
-      notifyCount: muted ? 0 : 1,
-    });
+    const [inserted] = await db
+      .insert(schema.incidents)
+      .values({
+        monitorId: monitor.id,
+        componentPath: a.componentPath ?? undefined,
+        kind: a.kind,
+        severity: a.severity,
+        metricValue: a.metricValue ?? undefined,
+        threshold: a.threshold ?? undefined,
+        reason: a.reason,
+        startedAt: now,
+        resolved: false,
+        suppressed: muted,
+        lastNotifiedAt: muted ? undefined : now,
+        notifyCount: muted ? 0 : 1,
+      })
+      .returning({ id: schema.incidents.id });
     if (!muted) {
       await dispatch({
         kind: "down",
         monitor,
+        incidentId: inserted.id,
         componentPath: a.componentPath,
         startedAt: now,
         severity: a.severity,
@@ -699,10 +703,18 @@ async function reconcileIncidents(
       // still-open critical. Suppressed (maintenance) incidents never re-notify.
       const escalated =
         row.severity !== "critical" && still.severity === "critical";
+      // Acknowledge / snooze (P3): both silence the renotify cadence. Escalation
+      // still re-alerts (the situation got worse) and resets the ack so reminders
+      // resume for the now-critical incident.
+      const acked = row.ackedAt != null;
+      const snoozed =
+        row.snoozedUntil != null && row.snoozedUntil.getTime() > now.getTime();
       const renotifyMs = thresholds.renotifyMinutes * 60_000;
       const dueRenotify =
         thresholds.renotifyMinutes > 0 &&
         still.severity === "critical" &&
+        !acked &&
+        !snoozed &&
         row.lastNotifiedAt != null &&
         now.getTime() - row.lastNotifiedAt.getTime() >= renotifyMs;
       const notify = !row.suppressed && (escalated || dueRenotify);
@@ -713,6 +725,7 @@ async function reconcileIncidents(
           threshold: still.threshold ?? undefined,
           reason: still.reason,
           severity: still.severity,
+          ...(escalated ? { ackedAt: null, ackedBy: null, snoozedUntil: null } : {}),
           ...(notify
             ? { lastNotifiedAt: now, notifyCount: row.notifyCount + 1 }
             : {}),
@@ -722,6 +735,7 @@ async function reconcileIncidents(
         await dispatch({
           kind: "down",
           monitor,
+          incidentId: row.id,
           componentPath: row.componentPath,
           startedAt: row.startedAt,
           severity: still.severity,

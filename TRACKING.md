@@ -13,7 +13,7 @@ _Last updated: 2026-07-16 · branch `feat/notify-native-channels`_
 |-------|-------|--------|-----------|--------|
 | P1 | Native channels (Slack / Discord / Teams) | S | — | ✅ |
 | P2 | Notification routing (monitor / group / severity) | L | — | ✅ |
-| P3 | Acknowledge & snooze (inbound) | M | P1 | ⬜ |
+| P3 | Acknowledge & snooze (inbound) | M | P1 | ✅ |
 | P4 | Escalation policies (multi-step) | M–L | P2, P3 | ⬜ |
 | P5 | On-call schedules + responders | L | P4 | ⬜ |
 | P6 | Alert dependencies & dedup | M | — | ⬜ |
@@ -62,13 +62,19 @@ three kinds. 175 tests green · typecheck + build clean.
 - [x] Form UI: per-row routing editor — `routes-editor.tsx`, wired in `channels-client.tsx` + `page.tsx`
 - [x] `db:generate` migration committed (dev DB used `db:push` equivalent)
 
-## P3 — Acknowledge & snooze ⬜
-- [ ] Schema: `incidents.ackedAt` / `ackedBy` / `snoozedUntil` + `db:push`
-- [ ] Signed tokenless route `/api/incidents/[id]/ack` (HMAC via `lib/webhook-auth.ts`)
-- [ ] Telegram inline callback + Slack interaction endpoint
-- [ ] Ack links in notification payloads
-- [ ] `reconcileIncidents` halts renotify once acked
-- [ ] Tests
+## P3 — Acknowledge & snooze ✅
+- [x] Schema: `incidents.ackedAt` / `ackedBy` / `snoozedUntil`; migration `drizzle/0013_overrated_justice.sql`
+- [x] HMAC sign/verify in `lib/crypto.ts` (`signToken`/`verifyToken`, reuses instance key)
+- [x] Signed link helpers — `lib/ack.ts` (`ackToken`/`verifyAckToken`/`ackUrl`) + tests
+- [x] Public route `/api/ack/[id]` — GET confirm page + POST apply (guards against email link-scanner auto-ack); added to `middleware.ts` public paths
+- [x] Ack link in message body + `ackUrl` in webhook payload — `lib/notifier.ts`
+- [x] `reconcileIncidents` halts renotify when acked/snoozed; escalation clears the ack — `lib/checker.ts`
+- [x] Tests: ack helpers + 3 reconcile integration cases (ack silent, snooze silent, escalation clears ack)
+
+> **Decision:** ack is delivered as a **signed link** (works in every channel with
+> no per-platform setup). Native Slack buttons / Telegram inline callbacks need a
+> Slack app + public signed request handling — deferred as a follow-up.
+> **UI:** an "Acknowledged" badge in the incidents view is a nice-to-have, not done.
 
 ## P4 — Escalation policies ⬜
 - [ ] Schema: `escalation_policies` + steps; `incidents.escalationStep` + `db:push`

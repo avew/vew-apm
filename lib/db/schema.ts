@@ -214,6 +214,11 @@ export const incidents = sqliteTable(
     // how many alerts fired (open + reminders + escalations).
     lastNotifiedAt: integer("last_notified_at", { mode: "timestamp" }),
     notifyCount: integer("notify_count").notNull().default(0),
+    // Acknowledge / snooze (P3): an acked incident stops renotifying; a snoozed
+    // incident stops until snoozedUntil passes.
+    ackedAt: integer("acked_at", { mode: "timestamp" }),
+    ackedBy: text("acked_by"),
+    snoozedUntil: integer("snoozed_until", { mode: "timestamp" }),
   },
   (t) => [index("incidents_monitor_open_idx").on(t.monitorId, t.resolved)],
 );
