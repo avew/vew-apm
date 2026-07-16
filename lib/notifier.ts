@@ -1,5 +1,5 @@
 import { getDb, schema } from "@/lib/db/client";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { sendWebhook, type WebhookConfig } from "./notifiers/webhook";
 import { sendEmail, type EmailConfig } from "./notifiers/email";
 import { sendTelegram, type TelegramConfig } from "./notifiers/telegram";
@@ -10,6 +10,7 @@ import { withRetry } from "./retry";
 import { decryptSecret } from "./crypto";
 import type { Monitor } from "@/lib/db/schema";
 import type { Severity, AlertKind } from "./rules";
+import { channelShouldFire, type RouteRule } from "./routing";
 
 export type Event =
   | {
@@ -66,7 +67,6 @@ function severityColor(ev: Event): string {
   return ev.severity === "critical" ? "#ef4444" : "#f59e0b";
 }
 
-/** Notifications are global: every enabled channel fires for every monitor. */
 async function loadEnabledChannels() {
   const db = getDb();
   return db
@@ -75,9 +75,44 @@ async function loadEnabledChannels() {
     .where(eq(schema.notificationChannels.enabled, true));
 }
 
+/**
+ * Load routing rules for the given channels, grouped by channel id. A channel
+ * with no rows fires for everything (see `channelShouldFire`).
+ */
+async function loadRoutesByChannel(
+  channelIds: number[],
+): Promise<Map<number, RouteRule[]>> {
+  const byChannel = new Map<number, RouteRule[]>();
+  if (channelIds.length === 0) return byChannel;
+  const db = getDb();
+  const rows = await db
+    .select()
+    .from(schema.channelRoutes)
+    .where(inArray(schema.channelRoutes.channelId, channelIds));
+  for (const r of rows) {
+    const rule: RouteRule = {
+      scope: r.scope as RouteRule["scope"],
+      targetId: r.targetId,
+      minSeverity: r.minSeverity as Severity,
+      alertKinds: r.alertKinds ?? null,
+    };
+    const list = byChannel.get(r.channelId);
+    if (list) list.push(rule);
+    else byChannel.set(r.channelId, [rule]);
+  }
+  return byChannel;
+}
+
 export async function dispatch(ev: Event): Promise<void> {
   const channels = await loadEnabledChannels();
   if (channels.length === 0) return;
+  const routesByChannel = await loadRoutesByChannel(channels.map((c) => c.id));
+  const routeEvent = {
+    monitorId: ev.monitor.id,
+    group: ev.monitor.group,
+    severity: ev.severity,
+    alertKind: ev.alertKind,
+  };
   const { subject, body } = renderText(ev);
   const payload = {
     kind: ev.kind,
@@ -100,6 +135,10 @@ export async function dispatch(ev: Event): Promise<void> {
 
   await Promise.allSettled(
     channels.map(async (c) => {
+      // routing (P2): a channel with no rules fires for everything
+      if (!channelShouldFire(routesByChannel.get(c.id) ?? [], routeEvent)) {
+        return;
+      }
       const cfg = decryptSecret<Record<string, unknown>>(c.config);
       const label = `${c.kind}#${c.id}`;
       const send = async () => {

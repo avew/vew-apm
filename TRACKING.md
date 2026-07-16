@@ -12,7 +12,7 @@ _Last updated: 2026-07-16 · branch `feat/notify-native-channels`_
 | Phase | Title | Effort | Depends on | Status |
 |-------|-------|--------|-----------|--------|
 | P1 | Native channels (Slack / Discord / Teams) | S | — | ✅ |
-| P2 | Notification routing (monitor / group / severity) | L | — | ⬜ |
+| P2 | Notification routing (monitor / group / severity) | L | — | ✅ |
 | P3 | Acknowledge & snooze (inbound) | M | P1 | ⬜ |
 | P4 | Escalation policies (multi-step) | M–L | P2, P3 | ⬜ |
 | P5 | On-call schedules + responders | L | P4 | ⬜ |
@@ -53,13 +53,14 @@ three kinds. 175 tests green · typecheck + build clean.
 > connectors are being retired in favor of Power Automate Workflows (Adaptive
 > Cards) — revisit if targeting new-style Workflow webhooks.
 
-## P2 — Notification routing ⬜
-- [ ] Schema: `channel_routes` (`channelId`, `scope`, `targetId`, `minSeverity`, `alertKinds[]`) + `db:push`
-- [ ] `dispatch()` filters channels by event (monitor / group / severity / kind)
-- [ ] Default `all` route preserves current behavior on upgrade
-- [ ] Routes CRUD: `/api/notifications/[id]/routes`
-- [ ] Form UI for routing
-- [ ] Tests (routing match logic — keep pure)
+## P2 — Notification routing ✅
+- [x] Schema: `channel_routes` (`channelId`, `scope`, `targetId`, `minSeverity`, `alertKinds[]`); migration `drizzle/0012_cynical_killmonger.sql`
+- [x] Pure matcher `channelShouldFire()` — `lib/routing.ts` (+ 9 tests)
+- [x] `dispatch()` filters channels by event (monitor / group / severity / kind) — `lib/notifier.ts`
+- [x] No-routes channel fires for everything (back-compat; verified by checker.test)
+- [x] Routes CRUD: `/api/notifications/[id]/routes` (+ `/[routeId]` DELETE)
+- [x] Form UI: per-row routing editor — `routes-editor.tsx`, wired in `channels-client.tsx` + `page.tsx`
+- [x] `db:generate` migration committed (dev DB used `db:push` equivalent)
 
 ## P3 — Acknowledge & snooze ⬜
 - [ ] Schema: `incidents.ackedAt` / `ackedBy` / `snoozedUntil` + `db:push`

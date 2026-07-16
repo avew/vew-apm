@@ -1,9 +1,22 @@
 "use client";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Send, Trash2, Plus, Bell, Pencil } from "lucide-react";
+import { Send, Trash2, Plus, Bell, Pencil, Filter } from "lucide-react";
 import { NotificationModal } from "./notification-modal";
+import { RoutesEditor } from "./routes-editor";
 import { useT } from "@/lib/i18n-client";
+
+/** A routing rule row (P2), secret-free. */
+export type RouteRow = {
+  id: number;
+  scope: string;
+  targetId: string | null;
+  minSeverity: string;
+  alertKinds: string[] | null;
+};
+
+/** Minimal monitor shape for route target dropdowns. */
+export type MonitorLite = { id: number; name: string; group: string | null };
 
 /** Secret-free channel shape sent to the client (no token/apiKey). */
 export type SafeChannel = {
@@ -13,12 +26,17 @@ export type SafeChannel = {
   enabled: boolean;
   preview: string;
   config: Record<string, unknown>;
+  routes: RouteRow[];
 };
 
 export function ChannelsClient({
   initial,
+  monitors,
+  groups,
 }: {
   initial: SafeChannel[];
+  monitors: MonitorLite[];
+  groups: string[];
 }) {
   const [open, setOpen] = useState(false);
   const t = useT();
@@ -27,8 +45,8 @@ export function ChannelsClient({
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-[var(--muted)]">
-          Channels alert on incidents. Every enabled channel fires for all
-          monitors.
+          Channels alert on incidents. A channel fires for all monitors until you
+          add routing rules to scope it by monitor, group, or severity.
         </p>
         <button
           onClick={() => setOpen(true)}
@@ -48,7 +66,12 @@ export function ChannelsClient({
       ) : (
         <ul className="card divide-y divide-[var(--border)]">
           {initial.map((c) => (
-            <ChannelRow key={c.id} channel={c} />
+            <ChannelRow
+              key={c.id}
+              channel={c}
+              monitors={monitors}
+              groups={groups}
+            />
           ))}
         </ul>
       )}
@@ -58,13 +81,24 @@ export function ChannelsClient({
   );
 }
 
-function ChannelRow({ channel }: { channel: SafeChannel }) {
+function ChannelRow({
+  channel,
+  monitors,
+  groups,
+}: {
+  channel: SafeChannel;
+  monitors: MonitorLite[];
+  groups: string[];
+}) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  const [showRoutes, setShowRoutes] = useState(false);
+  const routeCount = channel.routes.length;
   return (
-    <li className="p-4 flex items-center justify-between gap-2">
+    <li className="p-4">
+    <div className="flex items-center justify-between gap-2">
       <div className="min-w-0">
         <div className="text-sm font-medium">
           {channel.name}{" "}
@@ -77,6 +111,15 @@ function ChannelRow({ channel }: { channel: SafeChannel }) {
         {msg && <div className="text-xs text-emerald-600 mt-0.5">{msg}</div>}
       </div>
       <div className="flex items-center gap-1 shrink-0">
+        <button
+          type="button"
+          onClick={() => setShowRoutes((s) => !s)}
+          title="Routing rules"
+          className="btn btn-ghost !px-2 !py-1 text-xs"
+        >
+          <Filter className="w-3 h-3" />{" "}
+          {routeCount > 0 ? `Routing (${routeCount})` : "All monitors"}
+        </button>
         <button
           type="button"
           disabled={pending}
@@ -149,6 +192,15 @@ function ChannelRow({ channel }: { channel: SafeChannel }) {
           <Trash2 className="w-3 h-3" />
         </button>
       </div>
+      </div>
+      {showRoutes && (
+        <RoutesEditor
+          channelId={channel.id}
+          routes={channel.routes}
+          monitors={monitors}
+          groups={groups}
+        />
+      )}
       {editing && (
         <NotificationModal edit={channel} onClose={() => setEditing(false)} />
       )}

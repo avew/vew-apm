@@ -1,7 +1,12 @@
 import { getDb, schema } from "@/lib/db/client";
-import { desc } from "drizzle-orm";
+import { asc, desc } from "drizzle-orm";
 import { decryptSecret } from "@/lib/crypto";
-import { ChannelsClient, type SafeChannel } from "./channels-client";
+import {
+  ChannelsClient,
+  type SafeChannel,
+  type MonitorLite,
+  type RouteRow,
+} from "./channels-client";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +52,40 @@ export default async function NotificationsPage() {
     .select()
     .from(schema.notificationChannels)
     .orderBy(desc(schema.notificationChannels.createdAt));
+
+  // Routing rules (P2), grouped by channel for the per-row routing editor.
+  const routeRows = await db
+    .select()
+    .from(schema.channelRoutes)
+    .orderBy(asc(schema.channelRoutes.id));
+  const routesByChannel = new Map<number, RouteRow[]>();
+  for (const r of routeRows) {
+    const row: RouteRow = {
+      id: r.id,
+      scope: r.scope,
+      targetId: r.targetId,
+      minSeverity: r.minSeverity,
+      alertKinds: r.alertKinds ?? null,
+    };
+    const list = routesByChannel.get(r.channelId);
+    if (list) list.push(row);
+    else routesByChannel.set(r.channelId, [row]);
+  }
+
+  // Monitors + groups feed the route target dropdowns.
+  const monitorRows = await db
+    .select({
+      id: schema.monitors.id,
+      name: schema.monitors.name,
+      group: schema.monitors.group,
+    })
+    .from(schema.monitors)
+    .orderBy(asc(schema.monitors.name));
+  const monitors: MonitorLite[] = monitorRows;
+  const groups = Array.from(
+    new Set(monitorRows.map((m) => m.group).filter((g): g is string => !!g)),
+  ).sort();
+
   // Decrypt server-side only to derive a safe preview; secrets never reach the client.
   const channels: SafeChannel[] = rows.map((c) => {
     let cfg: Record<string, unknown> = {};
@@ -62,12 +101,13 @@ export default async function NotificationsPage() {
       enabled: c.enabled,
       preview: preview(c.kind, cfg),
       config: secretFreeConfig(cfg),
+      routes: routesByChannel.get(c.id) ?? [],
     };
   });
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Notification channels</h1>
-      <ChannelsClient initial={channels} />
+      <ChannelsClient initial={channels} monitors={monitors} groups={groups} />
     </div>
   );
 }

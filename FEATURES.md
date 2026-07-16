@@ -73,6 +73,9 @@ Full catalogue of what Vew APM does. For a quick overview see the
   on the card color (green resolved · red critical · amber warning). Slack/Discord
   take an optional display name; Slack also an icon emoji.
 - **Webhook request auth** — None / Basic / Header / Bearer.
+- **Routing rules** (per channel) — scope a channel to a single monitor, a group,
+  or all; set a minimum severity (warning-and-up / critical-only) and restrict to
+  specific alert kinds. A channel with no rules fires for everything (default).
 - Per-channel config (incl. Resend API key) — no env var needed.
 - **Secrets encrypted at rest** (AES-256-GCM); never shipped to the client. Masked on
   edit (blank = keep).

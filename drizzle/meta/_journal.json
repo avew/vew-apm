@@ -85,6 +85,13 @@
       "when": 1784176811858,
       "tag": "0011_perfect_grey_gargoyle",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1784191584618,
+      "tag": "0012_cynical_killmonger",
+      "breakpoints": true
     }
   ]
 }

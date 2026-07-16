@@ -247,6 +247,24 @@ export const notificationChannels = sqliteTable("notification_channels", {
   createdAt: ts("created_at"),
 });
 
+// Per-channel routing rules (P2). A channel with NO routes fires for every
+// monitor/severity (backward-compatible default). A channel with routes fires
+// only when at least one route matches the event.
+export const channelRoutes = sqliteTable("channel_routes", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  channelId: integer("channel_id")
+    .notNull()
+    .references(() => notificationChannels.id, { onDelete: "cascade" }),
+  // "all" (any monitor) | "group" (targetId = group name) | "monitor" (targetId = monitor id)
+  scope: text("scope").notNull().default("all"),
+  targetId: text("target_id"),
+  // minimum severity that fires this route: "warning" (all) | "critical" (only crit)
+  minSeverity: text("min_severity").notNull().default("warning"),
+  // restrict to specific alert kinds; null/empty = all kinds
+  alertKinds: text("alert_kinds", { mode: "json" }).$type<string[]>(),
+  createdAt: ts("created_at"),
+});
+
 export const maintenanceWindows = sqliteTable("maintenance_windows", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
@@ -339,6 +357,7 @@ export type Check = typeof checks.$inferSelect;
 export type NewCheck = typeof checks.$inferInsert;
 export type Incident = typeof incidents.$inferSelect;
 export type NotificationChannel = typeof notificationChannels.$inferSelect;
+export type ChannelRoute = typeof channelRoutes.$inferSelect;
 export type MaintenanceWindow = typeof maintenanceWindows.$inferSelect;
 export type AlertSettings = typeof alertSettings.$inferSelect;
 export type MonitorService = typeof monitorServices.$inferSelect;
