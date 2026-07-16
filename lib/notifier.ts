@@ -191,12 +191,25 @@ async function deliver(
             .replaceAll("{{url}}", ev.monitor.url)
             .replaceAll("{{component}}", ev.componentPath ?? "overall")
         : `*${subject}*\n\n${body}`;
-      await sendTelegram(tg, text);
+      await sendTelegram(tg, text, {
+        ackIncidentId:
+          process.env.TELEGRAM_WEBHOOK_SECRET &&
+          ev.kind === "down" &&
+          ev.incidentId != null
+            ? ev.incidentId
+            : undefined,
+      });
     } else if (c.kind === "slack") {
       await sendSlack(cfg as unknown as SlackConfig, {
         title: subject,
         text: body,
         color: severityColor(ev),
+        ackIncidentId:
+          process.env.SLACK_SIGNING_SECRET &&
+          ev.kind === "down" &&
+          ev.incidentId != null
+            ? ev.incidentId
+            : undefined,
       });
     } else if (c.kind === "discord") {
       await sendDiscord(cfg as unknown as DiscordConfig, {

@@ -11,6 +11,8 @@ const PUBLIC_PATHS = [
   "/api/health",
   "/api/ack",
   "/api/metrics",
+  "/api/slack",
+  "/api/telegram",
   "/status",
 ];
 
