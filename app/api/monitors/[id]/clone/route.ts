@@ -57,5 +57,39 @@ export async function POST(
     })
     .returning();
 
+  // Carry over prometheus metric sources + rules so the clone keeps its alerts.
+  // Copy sources first, mapping old source id → new, then remap each rule.
+  const sources = await db
+    .select()
+    .from(schema.metricSources)
+    .where(eq(schema.metricSources.monitorId, m.id));
+  const sourceIdMap = new Map<number, number>();
+  for (const s of sources) {
+    const [ns] = await db
+      .insert(schema.metricSources)
+      .values({ monitorId: clone.id, label: s.label, url: s.url })
+      .returning({ id: schema.metricSources.id });
+    sourceIdMap.set(s.id, ns.id);
+  }
+  const rules = await db
+    .select()
+    .from(schema.metricRules)
+    .where(eq(schema.metricRules.monitorId, m.id));
+  if (rules.length > 0) {
+    await db.insert(schema.metricRules).values(
+      rules.map((r) => ({
+        monitorId: clone.id,
+        sourceId: r.sourceId != null ? (sourceIdMap.get(r.sourceId) ?? null) : null,
+        label: r.label,
+        metricName: r.metricName,
+        labelMatchers: r.labelMatchers,
+        operator: r.operator,
+        warnValue: r.warnValue,
+        critValue: r.critValue,
+        enabled: r.enabled,
+      })),
+    );
+  }
+
   return NextResponse.json({ id: clone.id }, { status: 201 });
 }

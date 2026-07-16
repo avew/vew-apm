@@ -8,7 +8,7 @@ const PatchBody = z.object({
   name: z.string().min(1).max(120).optional(),
   url: z.string().url().optional(),
   method: z.enum(["GET", "POST"]).optional(),
-  type: z.enum(["actuator", "http", "json"]).optional(),
+  type: z.enum(["actuator", "http", "json", "prometheus"]).optional(),
   expectStatus: z.string().max(20).nullable().optional(),
   keyword: z.string().max(200).nullable().optional(),
   statusPath: z.string().max(200).nullable().optional(),

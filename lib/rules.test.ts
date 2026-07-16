@@ -204,3 +204,50 @@ describe("evaluateRules — component down + keys", () => {
     expect(comp?.reason).toContain("OUT_OF_SERVICE");
   });
 });
+
+describe("evaluateRules — metric thresholds", () => {
+  const rule = {
+    key: "Heap",
+    label: "heap used",
+    operator: "gt" as const,
+    warnValue: 100,
+    critValue: 200,
+  };
+
+  it("warns when value crosses warn but not crit", () => {
+    const a = evaluateRules(ctx({ metrics: [{ ...rule, value: 150 }] })).find((x) => x.kind === "metric");
+    expect(a?.severity).toBe("warning");
+    expect(a?.metricValue).toBe(150);
+    expect(a?.threshold).toBe(100);
+    expect(a?.componentPath).toBe("Heap");
+    expect(a?.reason).toContain("heap used = 150 > 100");
+  });
+
+  it("critical when value crosses crit (crit wins over warn)", () => {
+    const found = evaluateRules(ctx({ metrics: [{ ...rule, value: 250 }] })).filter((x) => x.kind === "metric");
+    expect(found).toHaveLength(1);
+    expect(found[0].severity).toBe("critical");
+    expect(found[0].threshold).toBe(200);
+  });
+
+  it("no alert below warn", () => {
+    expect(
+      evaluateRules(ctx({ metrics: [{ ...rule, value: 50 }] })).find((x) => x.kind === "metric"),
+    ).toBeUndefined();
+  });
+
+  it("supports lt operator (alert when value falls below)", () => {
+    const a = evaluateRules(
+      ctx({ metrics: [{ key: "conns", label: "free conns", value: 2, operator: "lt", warnValue: 5, critValue: 1 }] }),
+    ).find((x) => x.kind === "metric");
+    expect(a?.severity).toBe("warning");
+    expect(a?.reason).toContain("< 5");
+  });
+
+  it("skips a threshold that is null", () => {
+    const a = evaluateRules(
+      ctx({ metrics: [{ key: "k", label: "l", value: 999, operator: "gt", warnValue: null, critValue: null }] }),
+    ).find((x) => x.kind === "metric");
+    expect(a).toBeUndefined();
+  });
+});

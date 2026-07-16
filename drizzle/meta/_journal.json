@@ -71,6 +71,20 @@
       "when": 1784114421655,
       "tag": "0009_slippery_guardsmen",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1784164996192,
+      "tag": "0010_sloppy_centennial",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1784176811858,
+      "tag": "0011_perfect_grey_gargoyle",
+      "breakpoints": true
     }
   ]
 }

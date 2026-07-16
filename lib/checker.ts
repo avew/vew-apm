@@ -3,6 +3,7 @@ import { getDb, schema } from "@/lib/db/client";
 import { and, eq, lte, desc, inArray } from "drizzle-orm";
 import { parseHealth, type ParsedHealth } from "./parser";
 import { evaluateHttp, evaluateJson } from "./check-eval";
+import { parsePromText, selectSample, type PromSample } from "./prom-parse";
 import { buildAuthHeaders } from "./auth-header";
 import { isMonitorMuted } from "./maintenance";
 import { dispatch } from "./notifier";
@@ -12,6 +13,8 @@ import {
   alertKey,
   type DesiredAlert,
   type AlertKind,
+  type MetricInput,
+  type MetricOp,
 } from "./rules";
 import type { Monitor } from "@/lib/db/schema";
 
@@ -119,7 +122,7 @@ export async function readBodyCapped(
 async function fetchHealth(monitor: Monitor): Promise<FetchResult> {
   const started = Date.now();
   const headers: Record<string, string> = {
-    accept: "application/json",
+    accept: monitor.type === "prometheus" ? "text/plain" : "application/json",
     ...buildAuthHeaders(monitor),
   };
   try {
@@ -162,6 +165,23 @@ async function fetchHealth(monitor: Monitor): Promise<FetchResult> {
       const v = evaluateJson(res.status, text ?? "", {
         statusPath: monitor.statusPath ?? "$.status",
         statusUpValue: monitor.statusUpValue,
+        keyword: monitor.keyword,
+      });
+      return {
+        overall: v.up ? "UP" : "DOWN",
+        parsed: null,
+        responseMs,
+        httpStatus: res.status,
+        errorText: v.reason,
+        rawJson: null,
+      };
+    }
+    if (monitor.type === "prometheus") {
+      // Health = reachable + 2xx (+ optional keyword). Metric thresholds are
+      // evaluated separately from scraped metric_sources, so a breach never
+      // marks the monitor DOWN.
+      const v = evaluateHttp(res.status, text ?? "", {
+        expectStatus: monitor.expectStatus,
         keyword: monitor.keyword,
       });
       return {
@@ -232,6 +252,7 @@ function persistCheck(
   monitor: Monitor,
   result: FetchResult,
   muted: boolean,
+  metricReadings: { ruleId: number; value: number }[] = [],
 ): { checkId: number; componentStatuses: Map<string, string> } {
   const db = getDb();
   // One transaction: atomic (no orphan check without its child rows on a crash)
@@ -328,6 +349,14 @@ function persistCheck(
             .run();
         }
       }
+    }
+
+    // Prometheus metric samples — one row per rule with a reading this check
+    // (time series for the chart; pruned with checks via FK cascade).
+    if (metricReadings.length > 0) {
+      tx.insert(schema.metricSamples)
+        .values(metricReadings.map((r) => ({ checkId, ruleId: r.ruleId, value: r.value })))
+        .run();
     }
 
     return { checkId, componentStatuses: compMap };
@@ -545,6 +574,7 @@ async function reconcileIncidents(
   now: Date,
   muted: boolean,
   certDaysLeft: number | null,
+  metricInputs: MetricInput[] = [],
 ): Promise<void> {
   const db = getDb();
   const thresholds = await getEffectiveThresholds(monitor);
@@ -589,6 +619,7 @@ async function reconcileIncidents(
     eurekaServices,
     eurekaMissing,
     certDaysLeft,
+    metrics: metricInputs,
   });
   const desired = new Map(desiredList.map((a) => [alertKey(a), a]));
 
@@ -706,12 +737,106 @@ async function reconcileIncidents(
   }
 }
 
+async function loadMetricSources(monitorId: number) {
+  return getDb()
+    .select()
+    .from(schema.metricSources)
+    .where(eq(schema.metricSources.monitorId, monitorId));
+}
+
+async function loadEnabledMetricRules(monitorId: number) {
+  return getDb()
+    .select()
+    .from(schema.metricRules)
+    .where(
+      and(
+        eq(schema.metricRules.monitorId, monitorId),
+        eq(schema.metricRules.enabled, true),
+      ),
+    );
+}
+
+/** Scrape a Prometheus text endpoint. Null on any failure — rules just don't fire. */
+async function scrapeMetrics(
+  monitor: Monitor,
+  url: string,
+): Promise<PromSample[] | null> {
+  try {
+    const res = await fetch(url, {
+      method: "GET",
+      headers: { accept: "text/plain", ...buildAuthHeaders(monitor) },
+      signal: AbortSignal.timeout(monitor.timeoutMs),
+      cache: "no-store",
+    });
+    const { text, tooLarge } = await readBodyCapped(res);
+    if (!res.ok || tooLarge || text === null) return null;
+    return parsePromText(text);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Pure: match each enabled rule against its source's scraped samples. Returns the
+ * per-rule thresholds (for the rule engine) and the readings to store (rules with a
+ * present value). Rules without a source, or whose metric is absent, are skipped.
+ */
+function computeMetricReadings(
+  rules: (typeof schema.metricRules.$inferSelect)[],
+  sources: (typeof schema.metricSources.$inferSelect)[],
+  samplesByUrl: Map<string, PromSample[] | null>,
+): { inputs: MetricInput[]; readings: { ruleId: number; value: number }[] } {
+  const urlBySourceId = new Map(sources.map((s) => [s.id, s.url]));
+  const inputs: MetricInput[] = [];
+  const readings: { ruleId: number; value: number }[] = [];
+  for (const r of rules) {
+    if (r.sourceId == null) continue;
+    const url = urlBySourceId.get(r.sourceId);
+    if (!url) continue;
+    const value = selectSample(
+      samplesByUrl.get(url) ?? [],
+      r.metricName,
+      (r.labelMatchers as Record<string, string> | null) ?? null,
+    );
+    if (value === null) continue;
+    readings.push({ ruleId: r.id, value });
+    inputs.push({
+      key: r.label,
+      label: r.label,
+      value,
+      operator: r.operator as MetricOp,
+      warnValue: r.warnValue,
+      critValue: r.critValue,
+    });
+  }
+  return { inputs, readings };
+}
+
 export async function runCheck(monitor: Monitor): Promise<void> {
   const db = getDb();
   const now = new Date();
   const result = await fetchHealth(monitor);
   const muted = await isMonitorMuted(monitor.id, now);
-  persistCheck(monitor, result, muted);
+
+  // Prometheus metrics: scrape each distinct source URL once, then evaluate the
+  // monitor's rules against their source's samples. Independent of monitor type
+  // and of the health check — a breach raises a `metric` incident, not DOWN.
+  const [sources, rules] = await Promise.all([
+    loadMetricSources(monitor.id),
+    loadEnabledMetricRules(monitor.id),
+  ]);
+  const samplesByUrl = new Map<string, PromSample[] | null>();
+  if (rules.length > 0) {
+    for (const url of new Set(sources.map((s) => s.url))) {
+      samplesByUrl.set(url, await scrapeMetrics(monitor, url));
+    }
+  }
+  const { inputs: metricInputs, readings } = computeMetricReadings(
+    rules,
+    sources,
+    samplesByUrl,
+  );
+  persistCheck(monitor, result, muted, readings);
 
   // TLS cert: re-read for https monitors; keep the last known value on failure
   // so a transient TLS blip doesn't clear/flap the expiry alert.
@@ -722,7 +847,7 @@ export async function runCheck(monitor: Monitor): Promise<void> {
     ? (certExpiresAt.getTime() - now.getTime()) / 86_400_000
     : null;
 
-  await reconcileIncidents(monitor, result, now, muted, certDaysLeft);
+  await reconcileIncidents(monitor, result, now, muted, certDaysLeft, metricInputs);
   await db
     .update(schema.monitors)
     .set({
