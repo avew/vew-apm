@@ -15,6 +15,8 @@ import { ComponentTree } from "./component-tree";
 import { HealthProbes } from "./health-probes";
 import { ServiceRegistry } from "./service-registry";
 import { MetricRulesClient } from "./metric-rules-client";
+import { IncidentBrowser } from "./incident-browser";
+import { loadMonitorIncidents } from "@/lib/incident-list";
 import { AutoRefresh } from "../../auto-refresh";
 import {
   ChevronLeft,
@@ -174,34 +176,6 @@ async function loadMetricSeries(
   return series;
 }
 
-const KIND_LABEL: Record<string, string> = {
-  availability: "Availability",
-  disk: "Disk usage",
-  latency: "Latency",
-  component_down: "Component down",
-  eureka: "Eureka",
-  service_missing: "Service missing",
-  metric: "Metric",
-  down: "Down",
-};
-
-async function loadIncidents(monitorId: number) {
-  const db = getDb();
-  const rows = await db
-    .select()
-    .from(schema.incidents)
-    .where(eq(schema.incidents.monitorId, monitorId))
-    .orderBy(desc(schema.incidents.startedAt))
-    .limit(30);
-  // ongoing first, then critical before warning, then most recent
-  return rows.sort((a, b) => {
-    if (a.resolved !== b.resolved) return a.resolved ? 1 : -1;
-    if (a.severity !== b.severity) return a.severity === "critical" ? -1 : 1;
-    return b.startedAt.getTime() - a.startedAt.getTime();
-  });
-}
-
-
 export default async function MonitorDetail({
   params,
 }: {
@@ -219,7 +193,7 @@ export default async function MonitorDetail({
     { components },
     disk,
     services,
-    incidents,
+    incidentsInitial,
     muted,
     day,
     week,
@@ -230,7 +204,7 @@ export default async function MonitorDetail({
     loadLatestComponents(monitorId),
     loadDiskHistory(monitorId),
     loadServices(monitorId),
-    loadIncidents(monitorId),
+    loadMonitorIncidents({ monitorId }),
     isMonitorMuted(monitorId, now),
     uptimePct(monitorId, new Date(now.getTime() - 24 * 60 * 60 * 1000)),
     uptimePct(monitorId, new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)),
@@ -535,57 +509,7 @@ export default async function MonitorDetail({
 
       <section className="card p-5">
         <SectionHeader icon={AlertTriangle} title={t("secIncidents")} />
-        {incidents.length === 0 && (
-          <p className="text-sm text-[var(--muted)]">No incidents recorded.</p>
-        )}
-        <ul className="text-sm divide-y divide-[var(--border)]">
-          {incidents.map((i) => {
-            const sevBadge =
-              i.severity === "warning" ? "badge-warn" : "badge-down";
-            const dot =
-              i.resolved
-                ? "bg-emerald-500"
-                : i.severity === "warning"
-                  ? "bg-amber-500 animate-pulse"
-                  : "bg-red-500 animate-pulse";
-            return (
-              <li
-                key={i.id}
-                className="flex items-start justify-between gap-2 py-2.5"
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`w-2 h-2 rounded-full ${dot}`} />
-                    <span className={`badge ${sevBadge}`}>{i.severity}</span>
-                    <span className="text-xs font-medium">
-                      {KIND_LABEL[i.kind] ?? i.kind}
-                    </span>
-                    <span className="font-mono text-xs text-[var(--muted)]">
-                      {i.componentPath ?? "overall"}
-                    </span>
-                    {i.suppressed && (
-                      <span className="badge badge-muted">suppressed</span>
-                    )}
-                    {!i.resolved && <span className="badge badge-down">ongoing</span>}
-                  </div>
-                  {i.reason && (
-                    <div className="text-xs text-[var(--muted)] mt-1 ml-4">
-                      {i.reason}
-                    </div>
-                  )}
-                </div>
-                <span className="text-xs text-[var(--muted)] text-right shrink-0">
-                  {new Date(i.startedAt).toLocaleString()}
-                  {i.endedAt && (
-                    <>
-                      <br />→ {new Date(i.endedAt).toLocaleString()}
-                    </>
-                  )}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
+        <IncidentBrowser monitorId={monitorId} initial={incidentsInitial} />
       </section>
     </div>
   );
