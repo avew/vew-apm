@@ -6,7 +6,7 @@ import { evaluateHttp, evaluateJson } from "./check-eval";
 import { parsePromText, selectSample, type PromSample } from "./prom-parse";
 import { buildAuthHeaders } from "./auth-header";
 import { isMonitorMuted } from "./maintenance";
-import { dispatch, dispatchToChannel } from "./notifier";
+import { dispatch, dispatchToChannel, dispatchGrouped, type DownEvent } from "./notifier";
 import { dueEscalationSteps, type EscStep } from "./escalation";
 import { currentOnCallIndex } from "./oncall";
 import { getEffectiveThresholds } from "./alerts";
@@ -734,7 +734,10 @@ async function reconcileIncidents(
     ]),
   );
 
-  // Open new alerts.
+  // Open new alerts. Collect this tick's fresh, non-suppressed opens so that if
+  // several trip at once on one monitor we send a single grouped notification
+  // (A2) instead of a burst of one-per-incident alerts.
+  const freshOpens: DownEvent[] = [];
   for (const [key, a] of desired) {
     if (open.has(key)) continue;
     const [inserted] = await db
@@ -755,7 +758,7 @@ async function reconcileIncidents(
       })
       .returning({ id: schema.incidents.id });
     if (!suppressed) {
-      await dispatch({
+      freshOpens.push({
         kind: "down",
         monitor,
         incidentId: inserted.id,
@@ -768,6 +771,11 @@ async function reconcileIncidents(
         threshold: a.threshold,
       });
     }
+  }
+  if (freshOpens.length === 1) {
+    await dispatch(freshOpens[0]);
+  } else if (freshOpens.length > 1) {
+    await dispatchGrouped(monitor, freshOpens);
   }
 
   // Resolve or refresh existing.

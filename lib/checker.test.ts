@@ -240,6 +240,22 @@ describe("runCheck integration", () => {
     expect(incs[0].reason).toContain("%");
   });
 
+  it("groups simultaneous opens on one monitor into a single notification (A2)", async () => {
+    const m = await createMonitor({});
+    healthBody = {
+      status: "UP",
+      components: { redis: { status: "DOWN" }, kafka: { status: "DOWN" } },
+    };
+    webhookCalls = [];
+
+    await runCheck(m); // two component_down incidents open in one pass
+    const open = (await incidentsFor(m.id)).filter((i) => !i.resolved);
+    expect(open.length).toBe(2);
+    // one grouped webhook, not two
+    expect(webhookCalls).toHaveLength(1);
+    expect(webhookCalls[0]).toMatchObject({ grouped: true, count: 2 });
+  });
+
   it("suppresses the incident and skips notifying during a maintenance window", async () => {
     const m = await createMonitor();
     await getDb()

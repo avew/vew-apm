@@ -47,6 +47,17 @@ export type Event =
       threshold: number | null;
     };
 
+export type DownEvent = Extract<Event, { kind: "down" }>;
+
+function routeEventOf(ev: Event) {
+  return {
+    monitorId: ev.monitor.id,
+    group: ev.monitor.group,
+    severity: ev.severity,
+    alertKind: ev.alertKind,
+  };
+}
+
 function renderText(ev: Event): { subject: string; body: string } {
   const scope = ev.componentPath ? `\`${ev.componentPath}\`` : "overall";
   const sev = ev.severity.toUpperCase();
@@ -236,12 +247,7 @@ export async function dispatch(ev: Event): Promise<void> {
   const channels = await loadEnabledChannels();
   if (channels.length === 0) return;
   const routesByChannel = await loadRoutesByChannel(channels.map((c) => c.id));
-  const routeEvent = {
-    monitorId: ev.monitor.id,
-    group: ev.monitor.group,
-    severity: ev.severity,
-    alertKind: ev.alertKind,
-  };
+  const routeEvent = routeEventOf(ev);
   const msg = buildMessage(ev);
   await Promise.allSettled(
     channels
@@ -267,6 +273,94 @@ export async function dispatchToChannel(
     .where(eq(schema.notificationChannels.id, channelId));
   if (!c || !c.enabled) return;
   await deliver(c, ev, buildMessage(ev));
+}
+
+/** Highest severity wins for a grouped notification. */
+function groupSeverity(events: DownEvent[]): Severity {
+  return events.some((e) => e.severity === "critical") ? "critical" : "warning";
+}
+
+/** A representative event for color/template rendering of a group. */
+function groupRepresentative(monitor: Monitor, events: DownEvent[]): DownEvent {
+  return {
+    kind: "down",
+    monitor,
+    componentPath: null,
+    startedAt: events[0].startedAt,
+    severity: groupSeverity(events),
+    alertKind: events[0].alertKind,
+    reason: `${events.length} alerts`,
+    metricValue: null,
+    threshold: null,
+  };
+}
+
+function buildGroupedMessage(
+  monitor: Monitor,
+  events: DownEvent[],
+): RenderedMessage {
+  const sev = groupSeverity(events).toUpperCase();
+  const lines = events.map((e) => {
+    const scope = e.componentPath ? `\`${e.componentPath}\`` : "overall";
+    return `• *${e.alertKind}* ${scope} (${e.severity})${e.reason ? ` — ${e.reason}` : ""}`;
+  });
+  const subject = `[Vew APM][${sev}] ${events.length} alerts — ${monitor.name}`;
+  const body = `🔴 *${monitor.name}* — ${events.length} new alerts\nURL: ${monitor.url}\n${lines.join("\n")}`;
+  const payload = {
+    kind: "down",
+    grouped: true,
+    severity: groupSeverity(events),
+    monitor: { id: monitor.id, name: monitor.name, url: monitor.url },
+    count: events.length,
+    alerts: events.map((e) => ({
+      incidentId: e.incidentId ?? null,
+      alertKind: e.alertKind,
+      componentPath: e.componentPath,
+      severity: e.severity,
+      reason: e.reason,
+    })),
+    startedAt: events[0].startedAt.toISOString(),
+    endedAt: null,
+  };
+  return { subject, body, payload };
+}
+
+/**
+ * Deliver several simultaneous down events for ONE monitor (A2). Chat/webhook/
+ * email channels get a single grouped digest; incident-tracking channels
+ * (PagerDuty/Opsgenie) still get one trigger per incident, since they dedup and
+ * resolve by incident id. A channel receives the group iff routing matches at
+ * least one of the events.
+ */
+export async function dispatchGrouped(
+  monitor: Monitor,
+  events: DownEvent[],
+): Promise<void> {
+  if (events.length === 0) return;
+  const channels = await loadEnabledChannels();
+  if (channels.length === 0) return;
+  const routesByChannel = await loadRoutesByChannel(channels.map((c) => c.id));
+
+  const groupedMsg = buildGroupedMessage(monitor, events);
+  const repEv = groupRepresentative(monitor, events);
+
+  await Promise.allSettled(
+    channels.map(async (c) => {
+      const routes = routesByChannel.get(c.id) ?? [];
+      const matching = events.filter((ev) =>
+        channelShouldFire(routes, routeEventOf(ev)),
+      );
+      if (matching.length === 0) return;
+      if (c.kind === "pagerduty" || c.kind === "opsgenie") {
+        // per-incident: these providers key alerts by incident id
+        for (const ev of matching) {
+          await deliver(c, ev, buildMessage(ev));
+        }
+      } else {
+        await deliver(c, repEv, groupedMsg);
+      }
+    }),
+  );
 }
 
 /** Send a test message for a given kind + config (used before saving). */
