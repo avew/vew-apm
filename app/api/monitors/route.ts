@@ -84,5 +84,14 @@ export async function POST(req: Request) {
       renotifyMinutes: m.renotifyMinutes ?? null,
     })
     .returning();
+
+  // A prometheus monitor's own URL is a metrics endpoint — seed it as the first
+  // metric source so the type works out of the box (more can be added later).
+  if (row.type === "prometheus") {
+    await db
+      .insert(schema.metricSources)
+      .values({ monitorId: row.id, label: "default", url: row.url });
+  }
+
   return NextResponse.json({ monitor: row }, { status: 201 });
 }

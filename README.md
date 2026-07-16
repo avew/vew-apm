@@ -21,10 +21,12 @@ disk usage as a time series, and can't track Eureka registry membership.
   a JSON path you pick), or `prometheus` (scrape a metrics endpoint like
   `/actuator/prometheus` and alert on specific metrics — see below). A "Fetch
   sample" button previews the endpoint so you can see the shape first.
-- **Prometheus metrics** — for `prometheus` monitors, define per-monitor
-  **metric rules** (metric name + label matchers + operator + warn/critical
-  threshold). Each check scrapes the endpoint, charts the value over time, and
-  opens a `metric` incident on a breach (the monitor itself stays UP).
+- **Prometheus metrics** — attach metrics to **any** monitor: add one or more
+  **endpoints** (metric sources — e.g. a microservice's `/actuator/prometheus`,
+  several per monitor) and **metric rules** (metric name + label matchers +
+  operator + warn/critical threshold, each targeting an endpoint). Every check
+  scrapes the endpoints, charts each metric over time on the monitor's page, and
+  opens a `metric` incident on a breach — the monitor's own UP/DOWN is unaffected.
 - **Request auth** — per monitor: None, Basic, Header (custom name/value), or
   Bearer/JWT. Sent with every check (and the sample fetch).
 - **Actuator parser** — recursive walk of `components` into dot-paths, plus disk

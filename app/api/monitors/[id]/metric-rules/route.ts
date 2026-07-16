@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getDb, schema } from "@/lib/db/client";
 import { requireUser } from "@/lib/session";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 const CreateBody = z.object({
+  sourceId: z.number().int(),
   label: z.string().min(1).max(120),
   metricName: z.string().min(1).max(200),
   labelMatchers: z.record(z.string(), z.string()).nullish(),
@@ -46,10 +47,22 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   }
   const d = parse.data;
   const db = getDb();
+  // The source must belong to this monitor.
+  const [src] = await db
+    .select({ id: schema.metricSources.id })
+    .from(schema.metricSources)
+    .where(
+      and(
+        eq(schema.metricSources.id, d.sourceId),
+        eq(schema.metricSources.monitorId, mid),
+      ),
+    );
+  if (!src) return NextResponse.json({ error: "unknown source" }, { status: 400 });
   const [rule] = await db
     .insert(schema.metricRules)
     .values({
       monitorId: mid,
+      sourceId: d.sourceId,
       label: d.label,
       metricName: d.metricName,
       labelMatchers: (d.labelMatchers ?? null) as object | null,

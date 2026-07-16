@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/session";
 import { and, eq } from "drizzle-orm";
 
 const PatchBody = z.object({
+  sourceId: z.number().int().optional(),
   label: z.string().min(1).max(120).optional(),
   metricName: z.string().min(1).max(200).optional(),
   labelMatchers: z.record(z.string(), z.string()).nullish(),
@@ -38,6 +39,7 @@ export async function PATCH(
   // Only assign fields that were provided (labelMatchers null clears the matcher).
   const d = body.data;
   const updates: Record<string, unknown> = {};
+  if (d.sourceId !== undefined) updates.sourceId = d.sourceId;
   if (d.label !== undefined) updates.label = d.label;
   if (d.metricName !== undefined) updates.metricName = d.metricName;
   if (d.labelMatchers !== undefined) updates.labelMatchers = d.labelMatchers ?? null;

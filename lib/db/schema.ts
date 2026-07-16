@@ -130,8 +130,25 @@ export const serviceSnapshots = sqliteTable(
   (t) => [index("svc_check_source_idx").on(t.checkId, t.source)],
 );
 
-// Per-monitor Prometheus metric alert rules (for monitors of type "prometheus").
-// Each rule selects one sample (metricName + label matchers) and compares it to a
+// Prometheus scrape endpoints for a monitor. A monitor (any type) can have
+// several — e.g. one per microservice (gateway, billing-svc, …). Metric rules
+// target a source; the checker scrapes each distinct URL once per check.
+export const metricSources = sqliteTable(
+  "metric_sources",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    monitorId: integer("monitor_id")
+      .notNull()
+      .references(() => monitors.id, { onDelete: "cascade" }),
+    label: text("label").notNull(), // friendly name shown on rules + charts
+    url: text("url").notNull(), // e.g. https://billing/actuator/prometheus
+    createdAt: ts("created_at"),
+  },
+  (t) => [index("metric_sources_monitor_idx").on(t.monitorId)],
+);
+
+// Per-monitor Prometheus metric alert rules. Each rule targets a metric_source,
+// selects one sample (metricName + label matchers) and compares it to a
 // warn/crit threshold with an operator. Thresholds live here, NOT in
 // alert_settings, because they're metric-specific, not global.
 export const metricRules = sqliteTable(
@@ -141,6 +158,10 @@ export const metricRules = sqliteTable(
     monitorId: integer("monitor_id")
       .notNull()
       .references(() => monitors.id, { onDelete: "cascade" }),
+    // which endpoint to scrape this metric from (null = inert until set)
+    sourceId: integer("source_id").references(() => metricSources.id, {
+      onDelete: "cascade",
+    }),
     label: text("label").notNull(), // friendly name shown on the incident + chart
     metricName: text("metric_name").notNull(), // e.g. jvm_memory_used_bytes
     labelMatchers: text("label_matchers", { mode: "json" }), // Record<string,string> | null

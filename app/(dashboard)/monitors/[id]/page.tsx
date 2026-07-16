@@ -133,6 +133,15 @@ async function loadServiceRegistry(monitorId: number) {
     .orderBy(schema.monitorServices.serviceName);
 }
 
+async function loadMetricSources(monitorId: number) {
+  const db = getDb();
+  return db
+    .select()
+    .from(schema.metricSources)
+    .where(eq(schema.metricSources.monitorId, monitorId))
+    .orderBy(schema.metricSources.id);
+}
+
 async function loadMetricRules(monitorId: number) {
   const db = getDb();
   return db
@@ -229,9 +238,13 @@ export default async function MonitorDetail({
     loadAlertSettings(),
   ]);
   const registry = await loadServiceRegistry(monitorId);
-  const isProm = monitor.type === "prometheus";
-  const metricRules = isProm ? await loadMetricRules(monitorId) : [];
-  const metricSeries = isProm ? await loadMetricSeries(monitorId) : {};
+  // Prometheus metrics can be attached to any monitor (via metric sources), so
+  // load them regardless of type (cheap/empty when unused).
+  const [metricSources, metricRules, metricSeries] = await Promise.all([
+    loadMetricSources(monitorId),
+    loadMetricRules(monitorId),
+    loadMetricSeries(monitorId),
+  ]);
   const propertySources = propertySourcesFrom(
     components as { path: string; details: unknown }[],
   );
@@ -397,26 +410,29 @@ export default async function MonitorDetail({
         />
       </section>
 
-      {monitor.type === "prometheus" && (
-        <section className="card p-5">
-          <SectionHeader icon={Gauge} title="Metrics" />
-          <MetricRulesClient
-            monitorId={monitorId}
-            url={monitor.url}
-            initial={metricRules.map((r) => ({
-              id: r.id,
-              label: r.label,
-              metricName: r.metricName,
-              labelMatchers: (r.labelMatchers as Record<string, string> | null) ?? null,
-              operator: r.operator as "gt" | "gte" | "lt" | "lte",
-              warnValue: r.warnValue,
-              critValue: r.critValue,
-              enabled: r.enabled,
-            }))}
-            series={metricSeries}
-          />
-        </section>
-      )}
+      <section className="card p-5">
+        <SectionHeader
+          icon={Gauge}
+          title="Prometheus metrics"
+          hint="scrape + threshold rules"
+        />
+        <MetricRulesClient
+          monitorId={monitorId}
+          sources={metricSources.map((s) => ({ id: s.id, label: s.label, url: s.url }))}
+          initial={metricRules.map((r) => ({
+            id: r.id,
+            sourceId: r.sourceId,
+            label: r.label,
+            metricName: r.metricName,
+            labelMatchers: (r.labelMatchers as Record<string, string> | null) ?? null,
+            operator: r.operator as "gt" | "gte" | "lt" | "lte",
+            warnValue: r.warnValue,
+            critValue: r.critValue,
+            enabled: r.enabled,
+          }))}
+          series={metricSeries}
+        />
+      </section>
 
       {monitor.type === "actuator" && (
         <>
