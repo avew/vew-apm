@@ -9,10 +9,15 @@ export const dynamic = "force-dynamic";
 
 export default async function NewMonitorPage() {
   const t = await getT();
-  const monitors = await getDb()
+  const db = getDb();
+  const monitors = await db
     .select({ id: schema.monitors.id, name: schema.monitors.name })
     .from(schema.monitors)
     .orderBy(asc(schema.monitors.name));
+  const policies = await db
+    .select({ id: schema.escalationPolicies.id, name: schema.escalationPolicies.name })
+    .from(schema.escalationPolicies)
+    .orderBy(asc(schema.escalationPolicies.name));
   return (
     <div className="max-w-xl space-y-4">
       <div>
@@ -24,7 +29,7 @@ export default async function NewMonitorPage() {
         </Link>
         <h1 className="text-2xl font-semibold tracking-tight">{t("titleNewMonitor")}</h1>
       </div>
-      <MonitorForm monitors={monitors} />
+      <MonitorForm monitors={monitors} policies={policies} />
     </div>
   );
 }

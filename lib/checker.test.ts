@@ -458,6 +458,41 @@ describe("renotify + escalation", () => {
     }
   });
 
+  it("uses a monitor's own escalation policy override, even when not globally active (A1)", async () => {
+    const db = getDb();
+    const [channel] = await db.select().from(schema.notificationChannels);
+    // A non-active policy — only reachable via the per-monitor override.
+    const [policy] = await db
+      .insert(schema.escalationPolicies)
+      .values({ name: "per-monitor", active: false })
+      .returning();
+    const m = await createMonitor({
+      renotifyMinutes: 0,
+      escalationPolicyId: policy.id,
+    });
+    try {
+      await db
+        .insert(schema.escalationSteps)
+        .values({ policyId: policy.id, afterMinutes: 15, channelId: channel.id });
+      healthBody = { status: "UP", components: { redis: { status: "DOWN" } } };
+      await runCheck(m); // open critical
+      const incs = await incidentsFor(m.id);
+      await db
+        .update(schema.incidents)
+        .set({ startedAt: new Date(Date.now() - 20 * 60_000) })
+        .where(eq(schema.incidents.id, incs[0].id));
+      webhookCalls = [];
+
+      await runCheck(m); // escalates via the monitor's own policy
+      expect(webhookCalls.length).toBeGreaterThanOrEqual(1);
+      expect((await incidentsFor(m.id))[0].escalationStep).toBe(1);
+    } finally {
+      await db
+        .delete(schema.escalationPolicies)
+        .where(eq(schema.escalationPolicies.id, policy.id));
+    }
+  });
+
   it("re-alerts immediately when a warning escalates to critical", async () => {
     const m = await createMonitor({ renotifyMinutes: 0 }); // renotify off; escalation still fires
     healthBody = {

@@ -1,0 +1,1 @@
+ALTER TABLE `monitors` ADD `escalation_policy_id` integer REFERENCES escalation_policies(id) ON DELETE SET NULL;

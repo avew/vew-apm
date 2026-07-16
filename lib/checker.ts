@@ -570,14 +570,22 @@ async function syncServiceRegistry(
  * Opens incidents that should exist, resolves ones that no longer apply,
  * and refreshes metric/reason on ones that persist.
  */
-/** Steps of the single active escalation policy (P4), or [] if none is active. */
-async function loadActiveEscalationSteps(): Promise<EscStep[]> {
+/**
+ * Escalation steps that apply to a monitor: its own policy override
+ * (`escalationPolicyId`, A1) if set, otherwise the single globally-active
+ * policy (P4). Empty when neither resolves.
+ */
+async function loadEscalationStepsFor(monitor: Monitor): Promise<EscStep[]> {
   const db = getDb();
-  const [policy] = await db
-    .select({ id: schema.escalationPolicies.id })
-    .from(schema.escalationPolicies)
-    .where(eq(schema.escalationPolicies.active, true));
-  if (!policy) return [];
+  let policyId = monitor.escalationPolicyId ?? null;
+  if (policyId == null) {
+    const [active] = await db
+      .select({ id: schema.escalationPolicies.id })
+      .from(schema.escalationPolicies)
+      .where(eq(schema.escalationPolicies.active, true));
+    policyId = active?.id ?? null;
+  }
+  if (policyId == null) return [];
   const steps = await db
     .select({
       afterMinutes: schema.escalationSteps.afterMinutes,
@@ -585,7 +593,7 @@ async function loadActiveEscalationSteps(): Promise<EscStep[]> {
       scheduleId: schema.escalationSteps.scheduleId,
     })
     .from(schema.escalationSteps)
-    .where(eq(schema.escalationSteps.policyId, policy.id));
+    .where(eq(schema.escalationSteps.policyId, policyId));
   return steps;
 }
 
@@ -658,7 +666,7 @@ async function reconcileIncidents(
 ): Promise<void> {
   const db = getDb();
   const thresholds = await getEffectiveThresholds(monitor);
-  const escalationSteps = await loadActiveEscalationSteps();
+  const escalationSteps = await loadEscalationStepsFor(monitor);
   // Dependency suppression (P6): if this monitor's parent is currently down
   // (has an open availability incident), suppress this monitor's incidents so a
   // downed dependency does not fan out into an alert storm. Transitive by

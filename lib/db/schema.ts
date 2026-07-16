@@ -48,6 +48,12 @@ export const monitors = sqliteTable(
       (): AnySQLiteColumn => monitors.id,
       { onDelete: "set null" },
     ),
+    // optional per-monitor escalation policy override (A1); null = use the
+    // single globally-active policy.
+    escalationPolicyId: integer("escalation_policy_id").references(
+      (): AnySQLiteColumn => escalationPolicies.id,
+      { onDelete: "set null" },
+    ),
     nextCheckAt: ts("next_check_at"),
     lastStatus: text("last_status"),
     // Alert threshold overrides (null = inherit global alert_settings)
