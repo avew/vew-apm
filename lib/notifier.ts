@@ -6,6 +6,8 @@ import { sendTelegram, type TelegramConfig } from "./notifiers/telegram";
 import { sendSlack, type SlackConfig } from "./notifiers/slack";
 import { sendDiscord, type DiscordConfig } from "./notifiers/discord";
 import { sendTeams, type TeamsConfig } from "./notifiers/teams";
+import { sendPagerDuty, type PagerDutyConfig } from "./notifiers/pagerduty";
+import { sendOpsgenie, type OpsgenieConfig } from "./notifiers/opsgenie";
 import { withRetry } from "./retry";
 import { decryptSecret } from "./crypto";
 import type { Monitor, NotificationChannel } from "@/lib/db/schema";
@@ -34,6 +36,7 @@ export type Event =
   | {
       kind: "resolved";
       monitor: Monitor;
+      incidentId?: number;
       componentPath: string | null;
       startedAt: Date;
       endedAt: Date;
@@ -64,6 +67,19 @@ function renderText(ev: Event): { subject: string; body: string } {
     subject: `[Vew APM][RESOLVED] ${ev.alertKind} — ${ev.monitor.name} (${scope})`,
     body: `✅ *${ev.monitor.name}* recovered: *${ev.alertKind}*\nURL: ${ev.monitor.url}\nScope: ${scope}\nStarted: ${ev.startedAt.toISOString()}\nEnded:   ${ev.endedAt.toISOString()}\nDuration: ${Math.round((ev.endedAt.getTime() - ev.startedAt.getTime()) / 1000)}s`,
   };
+}
+
+/**
+ * Stable key for incident-tracking channels (PagerDuty/Opsgenie) so a resolve
+ * closes the alert its trigger opened, and repeated down notifications dedup
+ * into one alert. Falls back to a monitor+kind composite if no incident id.
+ */
+function incidentDedupKey(ev: Event): string {
+  const id =
+    ev.incidentId != null
+      ? String(ev.incidentId)
+      : `${ev.monitor.id}-${ev.alertKind}-${ev.componentPath ?? "overall"}`;
+  return `apm-incident-${id}`;
 }
 
 /** Chat-card accent color by event state: green resolved, red critical, amber warning. */
@@ -183,6 +199,22 @@ async function deliver(
         text: body,
         color: severityColor(ev),
       });
+    } else if (c.kind === "pagerduty") {
+      await sendPagerDuty(cfg as unknown as PagerDutyConfig, {
+        action: ev.kind === "resolved" ? "resolve" : "trigger",
+        dedupKey: incidentDedupKey(ev),
+        summary: subject,
+        severity: ev.severity === "critical" ? "critical" : "warning",
+        source: ev.monitor.name,
+      });
+    } else if (c.kind === "opsgenie") {
+      await sendOpsgenie(cfg as unknown as OpsgenieConfig, {
+        action: ev.kind === "resolved" ? "resolve" : "trigger",
+        alias: incidentDedupKey(ev),
+        message: subject,
+        priority: ev.severity === "critical" ? "P1" : "P3",
+        source: ev.monitor.name,
+      });
     }
   };
   try {
@@ -256,6 +288,15 @@ export async function sendTestConfig(
     await sendDiscord(cfg as unknown as DiscordConfig, { title: subject, text: body });
   } else if (kind === "teams") {
     await sendTeams(cfg as unknown as TeamsConfig, { title: subject, text: body });
+  } else if (kind === "pagerduty") {
+    const pd = cfg as unknown as PagerDutyConfig;
+    // trigger then resolve the same key so the test leaves no open alert
+    await sendPagerDuty(pd, { action: "trigger", dedupKey: "apm-test", summary: body, severity: "info", source: "Vew APM" });
+    await sendPagerDuty(pd, { action: "resolve", dedupKey: "apm-test", summary: body, severity: "info", source: "Vew APM" });
+  } else if (kind === "opsgenie") {
+    const og = cfg as unknown as OpsgenieConfig;
+    await sendOpsgenie(og, { action: "trigger", alias: "apm-test", message: body, priority: "P5", source: "Vew APM" });
+    await sendOpsgenie(og, { action: "resolve", alias: "apm-test", message: body, priority: "P5", source: "Vew APM" });
   } else {
     throw new Error(`unknown channel kind: ${kind}`);
   }

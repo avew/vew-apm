@@ -3,7 +3,15 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { X, Eye, EyeOff } from "lucide-react";
 
-type Kind = "telegram" | "webhook" | "email" | "slack" | "discord" | "teams";
+type Kind =
+  | "telegram"
+  | "webhook"
+  | "email"
+  | "slack"
+  | "discord"
+  | "teams"
+  | "pagerduty"
+  | "opsgenie";
 
 const cls = "field-input !mt-1";
 
@@ -92,6 +100,14 @@ export function NotificationModal({
   const [showHookUrl, setShowHookUrl] = useState(false);
   const [hookUsername, setHookUsername] = useState(str(cfg.username)); // slack + discord
   const [slackIcon, setSlackIcon] = useState(str(cfg.iconEmoji)); // slack only
+  // pagerduty (routingKey secret) / opsgenie (apiKey secret)
+  const [pdRoutingKey, setPdRoutingKey] = useState("");
+  const [showPdKey, setShowPdKey] = useState(false);
+  const [ogApiKey, setOgApiKey] = useState("");
+  const [showOgKey, setShowOgKey] = useState(false);
+  const [ogRegion, setOgRegion] = useState<"us" | "eu">(
+    (str(cfg.region) as "us" | "eu") || "us",
+  );
   // email (apiKey is secret — always starts blank in edit)
   const [emailApiKey, setEmailApiKey] = useState("");
   const [showApiKey, setShowApiKey] = useState(false);
@@ -146,6 +162,17 @@ export function NotificationModal({
         ...base,
         ...(hookUsername.trim() ? { username: hookUsername.trim() } : {}),
         ...(slackIcon.trim() ? { iconEmoji: slackIcon.trim() } : {}),
+      };
+    }
+    if (kind === "pagerduty") {
+      if (!isEdit && !pdRoutingKey.trim()) return null;
+      return pdRoutingKey.trim() ? { routingKey: pdRoutingKey.trim() } : {};
+    }
+    if (kind === "opsgenie") {
+      if (!isEdit && !ogApiKey.trim()) return null;
+      return {
+        ...(ogApiKey.trim() ? { apiKey: ogApiKey.trim() } : {}),
+        region: ogRegion,
       };
     }
     // email
@@ -245,6 +272,8 @@ export function NotificationModal({
               <option value="slack">Slack</option>
               <option value="discord">Discord</option>
               <option value="teams">Microsoft Teams</option>
+              <option value="pagerduty">PagerDuty</option>
+              <option value="opsgenie">Opsgenie</option>
               <option value="webhook">Webhook</option>
               <option value="email">Email (via Resend)</option>
             </select>
@@ -463,6 +492,71 @@ export function NotificationModal({
                   )}
                 </div>
               )}
+            </>
+          )}
+
+          {kind === "pagerduty" && (
+            <label className="block text-sm">
+              <span className="font-medium">Integration / Routing Key</span>
+              <div className="relative">
+                <input
+                  className={`${cls} pr-10`}
+                  type={showPdKey ? "text" : "password"}
+                  value={pdRoutingKey}
+                  placeholder={isEdit ? "leave blank to keep current" : "Events API v2 routing key"}
+                  onChange={(e) => setPdRoutingKey(e.target.value)}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPdKey((s) => !s)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--foreground)]"
+                >
+                  {showPdKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <span className="text-xs text-[var(--muted)]">
+                Create an <b>Events API v2</b> integration on a PagerDuty service
+                and paste its integration key. Incidents map to trigger / resolve.
+              </span>
+            </label>
+          )}
+
+          {kind === "opsgenie" && (
+            <>
+              <label className="block text-sm">
+                <span className="font-medium">API Key</span>
+                <div className="relative">
+                  <input
+                    className={`${cls} pr-10`}
+                    type={showOgKey ? "text" : "password"}
+                    value={ogApiKey}
+                    placeholder={isEdit ? "leave blank to keep current" : "Opsgenie API integration key"}
+                    onChange={(e) => setOgApiKey(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowOgKey((s) => !s)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--foreground)]"
+                  >
+                    {showOgKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <span className="text-xs text-[var(--muted)]">
+                  From an <b>API</b> integration in Opsgenie. Incidents open and
+                  close an alert keyed by incident id.
+                </span>
+              </label>
+              <label className="block text-sm">
+                <span className="font-medium">Region</span>
+                <select
+                  className={cls}
+                  value={ogRegion}
+                  onChange={(e) => setOgRegion(e.target.value as "us" | "eu")}
+                >
+                  <option value="us">US (api.opsgenie.com)</option>
+                  <option value="eu">EU (api.eu.opsgenie.com)</option>
+                </select>
+              </label>
             </>
           )}
 

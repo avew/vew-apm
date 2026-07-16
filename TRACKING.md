@@ -5,6 +5,11 @@ Live status for the ops-notification roadmap. Plan detail lives in
 
 **Legend:** ✅ done · 🚧 in progress · ⬜ not started · ⏸️ blocked
 
+**All 7 phases complete.** 205 tests green · typecheck + build clean. Deferred
+refinements (interactive Slack/Telegram ack buttons, per-monitor escalation policy,
+schedule overrides, cross-monitor alert grouping, edit-dependency UI) are noted per
+phase below.
+
 _Last updated: 2026-07-16 · branch `feat/notify-native-channels`_
 
 ## Phase status
@@ -17,7 +22,7 @@ _Last updated: 2026-07-16 · branch `feat/notify-native-channels`_
 | P4 | Escalation policies (multi-step) | M–L | P2, P3 | ✅ |
 | P5 | On-call schedules + responders | L | P4 | ✅ |
 | P6 | Alert dependencies & dedup | M | — | ✅ |
-| P7 | PagerDuty / Opsgenie | S–M | P1 pattern | ⬜ |
+| P7 | PagerDuty / Opsgenie | S–M | P1 pattern | ✅ |
 
 ## P1 — Native channels ✅
 
@@ -114,8 +119,10 @@ three kinds. 175 tests green · typecheck + build clean.
 > support it); cross-monitor alert **grouping/dedup** into a single digest (the
 > suppression half of P6 is the higher-value piece and is done).
 
-## P7 — PagerDuty / Opsgenie ⬜
-- [ ] Sender mapping events → Events API v2
-- [ ] trigger / acknowledge / resolve mapped to incident lifecycle
-- [ ] API validation + test enum + form
-- [ ] Tests
+## P7 — PagerDuty / Opsgenie ✅
+- [x] `sendPagerDuty` (Events API v2) + `sendOpsgenie` (Alert API, US/EU) — `lib/notifiers/{pagerduty,opsgenie}.ts`
+- [x] Down → trigger, recovery → resolve, deduped by incident id (`incidentDedupKey`); `resolved` event now carries `incidentId` — `lib/notifier.ts` + `lib/checker.ts`
+- [x] Dispatch + `sendTestConfig` (test does a trigger+resolve round-trip so no alert is left open)
+- [x] API validation + test enum; `routingKey` marked secret (Opsgenie reuses `apiKey`)
+- [x] Preview + form fields (PD routing key; Opsgenie API key + region)
+- [x] Tests: 8 sender cases (payload shape, trigger/resolve, retry classification)

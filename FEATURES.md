@@ -67,11 +67,15 @@ Full catalogue of what Vew APM does. For a quick overview see the
 ## Notifications
 
 - **Global channels** — webhook / email (via Resend) / Telegram / Slack / Discord /
-  Microsoft Teams. Every enabled channel fires for every monitor (per-monitor
-  silencing is via maintenance / pause).
+  Microsoft Teams / PagerDuty / Opsgenie. Every enabled channel fires for every
+  monitor unless scoped by routing rules (below).
 - **Chat channels** — Slack, Discord, and Teams via incoming webhooks; severity rides
   on the card color (green resolved · red critical · amber warning). Slack/Discord
   take an optional display name; Slack also an icon emoji.
+- **Incident-management channels** — PagerDuty (Events API v2) and Opsgenie (Alert
+  API, US/EU); a down alert triggers and recovery resolves the same alert (deduped
+  by incident id). If you already run one of these, its own escalation/on-call can
+  stand in for P4/P5.
 - **Webhook request auth** — None / Basic / Header / Bearer.
 - **Routing rules** (per channel) — scope a channel to a single monitor, a group,
   or all; set a minimum severity (warning-and-up / critical-only) and restrict to

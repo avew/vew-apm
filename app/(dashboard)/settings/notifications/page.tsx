@@ -32,12 +32,22 @@ function preview(kind: string, cfg: Record<string, unknown>): string {
     const who = cfg.username ? ` · as ${cfg.username}` : "";
     return `${host || "incoming webhook"}${who}`;
   }
+  if (kind === "pagerduty") return "PagerDuty Events API v2";
+  if (kind === "opsgenie") {
+    return `Opsgenie (${cfg.region === "eu" ? "EU" : "US"})`;
+  }
   return "";
 }
 
 // Strip secret fields so the edit form can prefill the rest without them ever
 // reaching the browser.
-const SECRET_KEYS = new Set(["botToken", "apiKey", "authHeaderValue", "webhookUrl"]);
+const SECRET_KEYS = new Set([
+  "botToken",
+  "apiKey",
+  "authHeaderValue",
+  "webhookUrl",
+  "routingKey",
+]);
 function secretFreeConfig(cfg: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(cfg)) {

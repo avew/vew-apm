@@ -774,6 +774,7 @@ async function reconcileIncidents(
         await dispatch({
           kind: "resolved",
           monitor,
+          incidentId: row.id,
           componentPath: row.componentPath,
           startedAt: row.startedAt,
           endedAt: now,
