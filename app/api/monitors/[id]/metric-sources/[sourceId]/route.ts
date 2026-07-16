@@ -54,7 +54,10 @@ export async function DELETE(
   const parsed = await ids(ctx);
   if (!parsed) return NextResponse.json({ error: "invalid id" }, { status: 400 });
   const db = getDb();
-  // Rules referencing this source cascade-delete via the FK.
+  // Delete the source's rules first (their samples cascade). SQLite ADD COLUMN
+  // can't carry ON DELETE CASCADE, so metric_rules.source_id is NO ACTION at the
+  // DB level — removing the rules explicitly avoids an FK constraint error.
+  await db.delete(schema.metricRules).where(eq(schema.metricRules.sourceId, parsed.sid));
   await db
     .delete(schema.metricSources)
     .where(
