@@ -10,6 +10,7 @@ const PUBLIC_PATHS = [
   "/api/fixture",
   "/api/health",
   "/api/ack",
+  "/api/metrics",
   "/status",
 ];
 

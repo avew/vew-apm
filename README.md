@@ -157,6 +157,19 @@ runs the same suite on every PR.
 - **Health**: `GET /api/health` reports Vew APM's own liveness (DB reachable +
   scheduler ticking) as `200`/`503` — public, no auth. The Docker image wires it
   into a `HEALTHCHECK` so orchestrators see `healthy`/`unhealthy`.
+- **Metrics**: `GET /api/metrics` exposes Prometheus gauges — per-monitor
+  `apm_monitor_up` / `response_ms` / `disk_used_percent` / `cert_days_left` /
+  `last_check_timestamp_seconds`, plus `apm_incidents_open{severity}` and
+  scheduler liveness. Open by default; set `METRICS_TOKEN` to require
+  `Authorization: Bearer <token>`. Example scrape config:
+
+  ```yaml
+  scrape_configs:
+    - job_name: vew-apm
+      metrics_path: /api/metrics
+      static_configs: [{ targets: ["vew-apm:3000"] }]
+      # authorization: { credentials: "<METRICS_TOKEN>" }   # if set
+  ```
 
 ## Environment
 
@@ -166,6 +179,7 @@ runs the same suite on every PR.
 | `SESSION_SECRET` | dev only | ≥ 32 chars, signs the session cookie. **Auto-generated under Docker.** |
 | `CRON_SECRET` | optional | protects `/api/cron/tick`. **Auto-generated under Docker.** |
 | `ENCRYPTION_KEY` | optional | encrypts channel secrets at rest. If unset, a random key is generated once at `<data-dir>/.secret_key`. Don't reuse `SESSION_SECRET`. |
+| `METRICS_TOKEN` | optional | if set, `/api/metrics` requires `Authorization: Bearer <token>`. Unset = open. |
 | `APP_BASE_URL` | no | used in notification links |
 
 Running locally (`npm run dev`) you must set `SESSION_SECRET` yourself; under
