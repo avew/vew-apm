@@ -84,6 +84,10 @@ Full catalogue of what Vew APM does. For a quick overview see the
   clicking it (Acknowledge / Snooze 1h / Snooze 4h) stops reminder notifications
   until the incident recovers or the snooze ends. Escalation to critical clears an
   ack and re-alerts. Requires `APP_BASE_URL` for the link to be included.
+- **Escalation policies** — an ordered, time-delayed ladder of steps; each step
+  pages a channel N minutes after a critical incident opens if it is still
+  unacknowledged. One policy is active at a time; ack / snooze pauses it. Managed
+  under Settings › Escalation.
 - Create / edit / test each channel from the UI.
 
 ## Status page & reporting

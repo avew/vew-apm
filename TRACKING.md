@@ -14,7 +14,7 @@ _Last updated: 2026-07-16 · branch `feat/notify-native-channels`_
 | P1 | Native channels (Slack / Discord / Teams) | S | — | ✅ |
 | P2 | Notification routing (monitor / group / severity) | L | — | ✅ |
 | P3 | Acknowledge & snooze (inbound) | M | P1 | ✅ |
-| P4 | Escalation policies (multi-step) | M–L | P2, P3 | ⬜ |
+| P4 | Escalation policies (multi-step) | M–L | P2, P3 | ✅ |
 | P5 | On-call schedules + responders | L | P4 | ⬜ |
 | P6 | Alert dependencies & dedup | M | — | ⬜ |
 | P7 | PagerDuty / Opsgenie | S–M | P1 pattern | ⬜ |
@@ -76,11 +76,19 @@ three kinds. 175 tests green · typecheck + build clean.
 > Slack app + public signed request handling — deferred as a follow-up.
 > **UI:** an "Acknowledged" badge in the incidents view is a nice-to-have, not done.
 
-## P4 — Escalation policies ⬜
-- [ ] Schema: `escalation_policies` + steps; `incidents.escalationStep` + `db:push`
-- [ ] `reconcileIncidents` advances step when unacked past `delayMinutes`
-- [ ] Ack (P3) stops the chain
-- [ ] Tests
+## P4 — Escalation policies ✅
+- [x] Schema: `escalation_policies` (+ `active`), `escalation_steps`, `incidents.escalationStep`; migration `drizzle/0014_productive_texas_twister.sql`
+- [x] Pure engine `dueEscalationSteps()` — `lib/escalation.ts` (+ 7 tests)
+- [x] `dispatchToChannel()` targeted delivery (bypasses routing) — refactored `lib/notifier.ts` (`buildMessage`/`deliver`)
+- [x] `reconcileIncidents` fires due steps for open, unacked, unsuppressed **critical** incidents — `lib/checker.ts`
+- [x] Ack / snooze pause escalation; escalation counts from incident open time
+- [x] CRUD API: `/api/escalation-policies` (+ `/[id]`, `/[id]/steps`, `/[id]/steps/[stepId]`)
+- [x] Settings UI: `Settings › Escalation` (create policy, set active, add/remove timed steps)
+- [x] Tests: engine (7) + reconcile integration (fires step, no double-fire)
+
+> **Scope decision:** escalation policy is **global** (one `active` at a time), gated
+> to **critical** incidents. Per-monitor policy + warning-level escalation are future
+> refinements (the alerts.ts override pattern supports adding `monitors.escalationPolicyId` later).
 
 ## P5 — On-call schedules ⬜
 - [ ] Schema: `responders` + `oncall_schedules` (rrule) + `db:push`

@@ -372,6 +372,46 @@ describe("renotify + escalation", () => {
     expect(webhookCalls).toHaveLength(1);
   });
 
+  it("fires an escalation step to its channel after the delay elapses", async () => {
+    const m = await createMonitor({ renotifyMinutes: 0 }); // renotify off; only escalation fires
+    healthBody = { status: "UP", components: { redis: { status: "DOWN" } } };
+    await runCheck(m); // open critical
+    const incs = await incidentsFor(m.id);
+
+    const db = getDb();
+    const [channel] = await db.select().from(schema.notificationChannels);
+    const [policy] = await db
+      .insert(schema.escalationPolicies)
+      .values({ name: "test-ladder", active: true })
+      .returning();
+    try {
+      await db
+        .insert(schema.escalationSteps)
+        .values({ policyId: policy.id, afterMinutes: 15, channelId: channel.id });
+      // Backdate the incident so the 15-minute step is due.
+      await db
+        .update(schema.incidents)
+        .set({ startedAt: new Date(Date.now() - 20 * 60_000) })
+        .where(eq(schema.incidents.id, incs[0].id));
+      webhookCalls = [];
+
+      await runCheck(m); // still DOWN → escalation step fires
+      expect(webhookCalls.length).toBeGreaterThanOrEqual(1);
+      const after = await incidentsFor(m.id);
+      expect(after[0].escalationStep).toBe(1);
+
+      // Second tick does not re-fire the same step.
+      webhookCalls = [];
+      await runCheck(m);
+      expect(webhookCalls).toHaveLength(0);
+    } finally {
+      // Deactivate/remove so this global policy can't leak into later tests.
+      await db
+        .delete(schema.escalationPolicies)
+        .where(eq(schema.escalationPolicies.id, policy.id));
+    }
+  });
+
   it("re-alerts immediately when a warning escalates to critical", async () => {
     const m = await createMonitor({ renotifyMinutes: 0 }); // renotify off; escalation still fires
     healthBody = {

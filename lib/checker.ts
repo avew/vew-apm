@@ -6,7 +6,8 @@ import { evaluateHttp, evaluateJson } from "./check-eval";
 import { parsePromText, selectSample, type PromSample } from "./prom-parse";
 import { buildAuthHeaders } from "./auth-header";
 import { isMonitorMuted } from "./maintenance";
-import { dispatch } from "./notifier";
+import { dispatch, dispatchToChannel } from "./notifier";
+import { dueEscalationSteps, type EscStep } from "./escalation";
 import { getEffectiveThresholds } from "./alerts";
 import {
   evaluateRules,
@@ -568,6 +569,24 @@ async function syncServiceRegistry(
  * Opens incidents that should exist, resolves ones that no longer apply,
  * and refreshes metric/reason on ones that persist.
  */
+/** Steps of the single active escalation policy (P4), or [] if none is active. */
+async function loadActiveEscalationSteps(): Promise<EscStep[]> {
+  const db = getDb();
+  const [policy] = await db
+    .select({ id: schema.escalationPolicies.id })
+    .from(schema.escalationPolicies)
+    .where(eq(schema.escalationPolicies.active, true));
+  if (!policy) return [];
+  const steps = await db
+    .select({
+      afterMinutes: schema.escalationSteps.afterMinutes,
+      channelId: schema.escalationSteps.channelId,
+    })
+    .from(schema.escalationSteps)
+    .where(eq(schema.escalationSteps.policyId, policy.id));
+  return steps;
+}
+
 async function reconcileIncidents(
   monitor: Monitor,
   result: FetchResult,
@@ -578,6 +597,7 @@ async function reconcileIncidents(
 ): Promise<void> {
   const db = getDb();
   const thresholds = await getEffectiveThresholds(monitor);
+  const escalationSteps = await loadActiveEscalationSteps();
   const window = Math.max(thresholds.latencyWindow, thresholds.downForMinutes + 2, 10);
   const recentChecks = await loadRecentChecks(monitor.id, window);
 
@@ -746,6 +766,46 @@ async function reconcileIncidents(
           repeat: !escalated,
           escalated,
         });
+      }
+
+      // Escalation (P4): page additional channels on a time ladder while a
+      // critical incident stays open and unacknowledged. Ack/snooze pause it.
+      if (
+        escalationSteps.length > 0 &&
+        !row.suppressed &&
+        !acked &&
+        !snoozed &&
+        still.severity === "critical"
+      ) {
+        const minutesSinceStart =
+          (now.getTime() - row.startedAt.getTime()) / 60_000;
+        const { due, firedCount } = dueEscalationSteps(
+          escalationSteps,
+          minutesSinceStart,
+          row.escalationStep,
+        );
+        if (due.length > 0) {
+          await db
+            .update(schema.incidents)
+            .set({ escalationStep: firedCount })
+            .where(eq(schema.incidents.id, row.id));
+          for (const step of due) {
+            await dispatchToChannel(step.channelId, {
+              kind: "down",
+              monitor,
+              incidentId: row.id,
+              componentPath: row.componentPath,
+              startedAt: row.startedAt,
+              severity: still.severity,
+              alertKind: still.kind,
+              reason: still.reason,
+              metricValue: still.metricValue,
+              threshold: still.threshold,
+              repeat: true,
+              escalated: false,
+            });
+          }
+        }
       }
     }
   }

@@ -8,7 +8,7 @@ import { sendDiscord, type DiscordConfig } from "./notifiers/discord";
 import { sendTeams, type TeamsConfig } from "./notifiers/teams";
 import { withRetry } from "./retry";
 import { decryptSecret } from "./crypto";
-import type { Monitor } from "@/lib/db/schema";
+import type { Monitor, NotificationChannel } from "@/lib/db/schema";
 import type { Severity, AlertKind } from "./rules";
 import { channelShouldFire, type RouteRule } from "./routing";
 import { ackUrl } from "./ack";
@@ -108,16 +108,13 @@ async function loadRoutesByChannel(
   return byChannel;
 }
 
-export async function dispatch(ev: Event): Promise<void> {
-  const channels = await loadEnabledChannels();
-  if (channels.length === 0) return;
-  const routesByChannel = await loadRoutesByChannel(channels.map((c) => c.id));
-  const routeEvent = {
-    monitorId: ev.monitor.id,
-    group: ev.monitor.group,
-    severity: ev.severity,
-    alertKind: ev.alertKind,
-  };
+interface RenderedMessage {
+  subject: string;
+  body: string;
+  payload: Record<string, unknown>;
+}
+
+function buildMessage(ev: Event): RenderedMessage {
   const { subject, body } = renderText(ev);
   const payload = {
     kind: ev.kind,
@@ -139,67 +136,105 @@ export async function dispatch(ev: Event): Promise<void> {
     startedAt: ev.startedAt.toISOString(),
     endedAt: ev.kind === "resolved" ? ev.endedAt.toISOString() : null,
   };
+  return { subject, body, payload };
+}
 
+/** Deliver one rendered message to one channel, with retry. Never throws. */
+async function deliver(
+  c: NotificationChannel,
+  ev: Event,
+  msg: RenderedMessage,
+): Promise<void> {
+  const cfg = decryptSecret<Record<string, unknown>>(c.config);
+  const label = `${c.kind}#${c.id}`;
+  const { subject, body } = msg;
+  const send = async () => {
+    if (c.kind === "webhook") {
+      await sendWebhook(cfg as unknown as WebhookConfig, msg.payload);
+    } else if (c.kind === "email") {
+      await sendEmail(cfg as unknown as EmailConfig, subject, body);
+    } else if (c.kind === "telegram") {
+      const tg = cfg as unknown as TelegramConfig & { template?: string };
+      const text = tg.template
+        ? tg.template
+            .replaceAll("{{name}}", ev.monitor.name)
+            .replaceAll("{{status}}", ev.kind === "down" ? "DOWN" : "UP")
+            .replaceAll("{{severity}}", ev.severity)
+            .replaceAll("{{reason}}", ev.reason ?? "")
+            .replaceAll("{{url}}", ev.monitor.url)
+            .replaceAll("{{component}}", ev.componentPath ?? "overall")
+        : `*${subject}*\n\n${body}`;
+      await sendTelegram(tg, text);
+    } else if (c.kind === "slack") {
+      await sendSlack(cfg as unknown as SlackConfig, {
+        title: subject,
+        text: body,
+        color: severityColor(ev),
+      });
+    } else if (c.kind === "discord") {
+      await sendDiscord(cfg as unknown as DiscordConfig, {
+        title: subject,
+        text: body,
+        color: severityColor(ev),
+      });
+    } else if (c.kind === "teams") {
+      await sendTeams(cfg as unknown as TeamsConfig, {
+        title: subject,
+        text: body,
+        color: severityColor(ev),
+      });
+    }
+  };
+  try {
+    // Retry transient failures (network/timeout/429/5xx); permanent 4xx stops
+    // immediately. Callers run channels in parallel, so one channel's backoff
+    // never delays the others.
+    await withRetry(send, {
+      onRetry: (err, attempt, delayMs) =>
+        console.warn(
+          `notifier ${label} attempt ${attempt} failed, retry in ${delayMs}ms: ${(err as Error).message}`,
+        ),
+    });
+  } catch (err) {
+    console.error(`notifier ${label} gave up after retries:`, err);
+  }
+}
+
+export async function dispatch(ev: Event): Promise<void> {
+  const channels = await loadEnabledChannels();
+  if (channels.length === 0) return;
+  const routesByChannel = await loadRoutesByChannel(channels.map((c) => c.id));
+  const routeEvent = {
+    monitorId: ev.monitor.id,
+    group: ev.monitor.group,
+    severity: ev.severity,
+    alertKind: ev.alertKind,
+  };
+  const msg = buildMessage(ev);
   await Promise.allSettled(
-    channels.map(async (c) => {
+    channels
       // routing (P2): a channel with no rules fires for everything
-      if (!channelShouldFire(routesByChannel.get(c.id) ?? [], routeEvent)) {
-        return;
-      }
-      const cfg = decryptSecret<Record<string, unknown>>(c.config);
-      const label = `${c.kind}#${c.id}`;
-      const send = async () => {
-        if (c.kind === "webhook") {
-          await sendWebhook(cfg as unknown as WebhookConfig, payload);
-        } else if (c.kind === "email") {
-          await sendEmail(cfg as unknown as EmailConfig, subject, body);
-        } else if (c.kind === "telegram") {
-          const tg = cfg as unknown as TelegramConfig & { template?: string };
-          const text = tg.template
-            ? tg.template
-                .replaceAll("{{name}}", ev.monitor.name)
-                .replaceAll("{{status}}", ev.kind === "down" ? "DOWN" : "UP")
-                .replaceAll("{{severity}}", ev.severity)
-                .replaceAll("{{reason}}", ev.reason ?? "")
-                .replaceAll("{{url}}", ev.monitor.url)
-                .replaceAll("{{component}}", ev.componentPath ?? "overall")
-            : `*${subject}*\n\n${body}`;
-          await sendTelegram(tg, text);
-        } else if (c.kind === "slack") {
-          await sendSlack(cfg as unknown as SlackConfig, {
-            title: subject,
-            text: body,
-            color: severityColor(ev),
-          });
-        } else if (c.kind === "discord") {
-          await sendDiscord(cfg as unknown as DiscordConfig, {
-            title: subject,
-            text: body,
-            color: severityColor(ev),
-          });
-        } else if (c.kind === "teams") {
-          await sendTeams(cfg as unknown as TeamsConfig, {
-            title: subject,
-            text: body,
-            color: severityColor(ev),
-          });
-        }
-      };
-      try {
-        // Retry transient failures (network/timeout/429/5xx); permanent 4xx
-        // stops immediately. Channels run in parallel, so one channel's backoff
-        // never delays the others.
-        await withRetry(send, {
-          onRetry: (err, attempt, delayMs) =>
-            console.warn(
-              `notifier ${label} attempt ${attempt} failed, retry in ${delayMs}ms: ${(err as Error).message}`,
-            ),
-        });
-      } catch (err) {
-        console.error(`notifier ${label} gave up after retries:`, err);
-      }
-    }),
+      .filter((c) => channelShouldFire(routesByChannel.get(c.id) ?? [], routeEvent))
+      .map((c) => deliver(c, ev, msg)),
   );
+}
+
+/**
+ * Deliver an event to a single channel by id, bypassing routing rules. Used by
+ * escalation (P4), where a step explicitly names the channel to page. Disabled
+ * or missing channels are skipped.
+ */
+export async function dispatchToChannel(
+  channelId: number,
+  ev: Event,
+): Promise<void> {
+  const db = getDb();
+  const [c] = await db
+    .select()
+    .from(schema.notificationChannels)
+    .where(eq(schema.notificationChannels.id, channelId));
+  if (!c || !c.enabled) return;
+  await deliver(c, ev, buildMessage(ev));
 }
 
 /** Send a test message for a given kind + config (used before saving). */

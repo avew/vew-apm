@@ -219,6 +219,8 @@ export const incidents = sqliteTable(
     ackedAt: integer("acked_at", { mode: "timestamp" }),
     ackedBy: text("acked_by"),
     snoozedUntil: integer("snoozed_until", { mode: "timestamp" }),
+    // Escalation (P4): how many ordered policy steps have already fired.
+    escalationStep: integer("escalation_step").notNull().default(0),
   },
   (t) => [index("incidents_monitor_open_idx").on(t.monitorId, t.resolved)],
 );
@@ -267,6 +269,29 @@ export const channelRoutes = sqliteTable("channel_routes", {
   minSeverity: text("min_severity").notNull().default("warning"),
   // restrict to specific alert kinds; null/empty = all kinds
   alertKinds: text("alert_kinds", { mode: "json" }).$type<string[]>(),
+  createdAt: ts("created_at"),
+});
+
+// Escalation policies (P4). A policy is an ordered set of time-delayed steps;
+// each step notifies one channel N minutes after an incident opens if it is
+// still unacknowledged. At most one policy is active at a time (global).
+export const escalationPolicies = sqliteTable("escalation_policies", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  active: integer("active", { mode: "boolean" }).notNull().default(false),
+  createdAt: ts("created_at"),
+});
+
+export const escalationSteps = sqliteTable("escalation_steps", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  policyId: integer("policy_id")
+    .notNull()
+    .references(() => escalationPolicies.id, { onDelete: "cascade" }),
+  // minutes after the incident opened at which this step fires
+  afterMinutes: integer("after_minutes").notNull(),
+  channelId: integer("channel_id")
+    .notNull()
+    .references(() => notificationChannels.id, { onDelete: "cascade" }),
   createdAt: ts("created_at"),
 });
 
@@ -363,6 +388,8 @@ export type NewCheck = typeof checks.$inferInsert;
 export type Incident = typeof incidents.$inferSelect;
 export type NotificationChannel = typeof notificationChannels.$inferSelect;
 export type ChannelRoute = typeof channelRoutes.$inferSelect;
+export type EscalationPolicy = typeof escalationPolicies.$inferSelect;
+export type EscalationStep = typeof escalationSteps.$inferSelect;
 export type MaintenanceWindow = typeof maintenanceWindows.$inferSelect;
 export type AlertSettings = typeof alertSettings.$inferSelect;
 export type MonitorService = typeof monitorServices.$inferSelect;
