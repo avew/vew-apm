@@ -9,7 +9,36 @@ export type AlertKind =
   | "component_down"
   | "eureka"
   | "service_missing"
-  | "cert_expiry";
+  | "cert_expiry"
+  | "metric";
+
+export type MetricOp = "gt" | "gte" | "lt" | "lte";
+
+/** A scraped Prometheus metric reading + its per-rule warn/crit thresholds. */
+export interface MetricInput {
+  key: string; // dedup + incident scope (the rule's friendly label)
+  label: string;
+  value: number;
+  operator: MetricOp;
+  warnValue: number | null;
+  critValue: number | null;
+}
+
+const OP_SYMBOL: Record<MetricOp, string> = { gt: ">", gte: "≥", lt: "<", lte: "≤" };
+
+/** Whether `value` breaches `threshold` under `op`. */
+export function breaches(value: number, op: MetricOp, threshold: number): boolean {
+  switch (op) {
+    case "gt":
+      return value > threshold;
+    case "gte":
+      return value >= threshold;
+    case "lt":
+      return value < threshold;
+    case "lte":
+      return value <= threshold;
+  }
+}
 
 export interface DesiredAlert {
   kind: AlertKind;
@@ -39,6 +68,8 @@ export interface RuleContext {
   eurekaMissing: string[];
   /** Days until the TLS cert expires (null = not an https monitor / unknown). */
   certDaysLeft: number | null;
+  /** Current-check Prometheus metric readings (empty/absent for non-prometheus). */
+  metrics?: MetricInput[];
 }
 
 export function alertKey(a: {
@@ -188,6 +219,30 @@ export function evaluateRules(ctx: RuleContext): DesiredAlert[] {
         metricValue: days,
         threshold: t.certWarnDays,
         reason: `TLS certificate expires in ${Math.round(days)}d (≤ ${t.certWarnDays}d)`,
+      });
+    }
+  }
+
+  // 8. Prometheus metric thresholds (per-rule; crit before warn, one per rule).
+  for (const m of ctx.metrics ?? []) {
+    const sym = OP_SYMBOL[m.operator];
+    if (m.critValue !== null && breaches(m.value, m.operator, m.critValue)) {
+      out.push({
+        kind: "metric",
+        componentPath: m.key,
+        severity: "critical",
+        metricValue: m.value,
+        threshold: m.critValue,
+        reason: `${m.label} = ${m.value} ${sym} ${m.critValue}`,
+      });
+    } else if (m.warnValue !== null && breaches(m.value, m.operator, m.warnValue)) {
+      out.push({
+        kind: "metric",
+        componentPath: m.key,
+        severity: "warning",
+        metricValue: m.value,
+        threshold: m.warnValue,
+        reason: `${m.label} = ${m.value} ${sym} ${m.warnValue}`,
       });
     }
   }

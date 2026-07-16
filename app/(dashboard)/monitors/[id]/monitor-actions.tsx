@@ -16,7 +16,7 @@ import { useT } from "@/lib/i18n-client";
 type ThresholdProps = Omit<React.ComponentProps<typeof OverrideForm>, "onSaved">;
 
 export interface CheckConfig {
-  type: "actuator" | "http" | "json";
+  type: "actuator" | "http" | "json" | "prometheus";
   expectStatus: string | null;
   keyword: string | null;
   statusPath: string | null;
@@ -335,6 +335,7 @@ function EditModal({
             <option value="actuator">Spring actuator</option>
             <option value="http">HTTP (2xx + keyword)</option>
             <option value="json">JSON (status path)</option>
+            <option value="prometheus">Prometheus (metric rules)</option>
           </select>
         </label>
         {type === "http" && (
