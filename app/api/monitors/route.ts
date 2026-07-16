@@ -31,6 +31,7 @@ const CreateBody = z.object({
   serviceGraceSeconds: z.number().int().min(0).max(86400).nullish(),
   componentGraceSeconds: z.number().int().min(0).max(86400).nullish(),
   renotifyMinutes: z.number().int().min(0).max(10080).nullish(),
+  dependsOn: z.number().int().positive().nullish(),
 });
 
 export async function GET() {
@@ -73,6 +74,7 @@ export async function POST(req: Request) {
       authHeaderValue: m.authHeaderValue ?? null,
       enabled: m.enabled,
       group: m.group?.trim() || null,
+      dependsOn: m.dependsOn ?? null,
       diskWarnPct: m.diskWarnPct ?? null,
       diskCritPct: m.diskCritPct ?? null,
       downForMinutes: m.downForMinutes ?? null,

@@ -66,13 +66,39 @@ Full catalogue of what Vew APM does. For a quick overview see the
 
 ## Notifications
 
-- **Global channels** — webhook / email (via Resend) / Telegram. Every enabled channel
-  fires for every monitor (per-monitor silencing is via maintenance / pause).
+- **Global channels** — webhook / email (via Resend) / Telegram / Slack / Discord /
+  Microsoft Teams / PagerDuty / Opsgenie. Every enabled channel fires for every
+  monitor unless scoped by routing rules (below).
+- **Chat channels** — Slack, Discord, and Teams via incoming webhooks; severity rides
+  on the card color (green resolved · red critical · amber warning). Slack/Discord
+  take an optional display name; Slack also an icon emoji.
+- **Incident-management channels** — PagerDuty (Events API v2) and Opsgenie (Alert
+  API, US/EU); a down alert triggers and recovery resolves the same alert (deduped
+  by incident id). If you already run one of these, its own escalation/on-call can
+  stand in for P4/P5.
 - **Webhook request auth** — None / Basic / Header / Bearer.
+- **Routing rules** (per channel) — scope a channel to a single monitor, a group,
+  or all; set a minimum severity (warning-and-up / critical-only) and restrict to
+  specific alert kinds. A channel with no rules fires for everything (default).
 - Per-channel config (incl. Resend API key) — no env var needed.
 - **Secrets encrypted at rest** (AES-256-GCM); never shipped to the client. Masked on
   edit (blank = keep).
 - **Delivery retries** with backoff (network / 429 / 5xx retry; permanent 4xx stops).
+- **Acknowledge / snooze** — every down alert carries a signed, session-free link;
+  clicking it (Acknowledge / Snooze 1h / Snooze 4h) stops reminder notifications
+  until the incident recovers or the snooze ends. Escalation to critical clears an
+  ack and re-alerts. Requires `APP_BASE_URL` for the link to be included.
+- **Escalation policies** — an ordered, time-delayed ladder of steps; each step
+  pages a channel (or the current on-call responder) N minutes after a critical
+  incident opens if it is still unacknowledged. One policy is active at a time;
+  ack / snooze pauses it. Managed under Settings › Escalation.
+- **On-call schedules** — responders map a person to a contact channel; a schedule
+  rotates over them every N days. An escalation step targeting a schedule pages
+  whoever is on call at fire time. Managed under Settings › On-call.
+- **Alert dependencies** — a monitor can depend on a parent; while the parent has an
+  open availability incident, the child's incidents are suppressed (no alert flood
+  for everything behind a downed gateway). Transitive across a chain. Set on the
+  create-monitor form.
 - Create / edit / test each channel from the UI.
 
 ## Status page & reporting

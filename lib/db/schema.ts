@@ -5,6 +5,7 @@ import {
   real,
   index,
   uniqueIndex,
+  type AnySQLiteColumn,
 } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 
@@ -40,6 +41,13 @@ export const monitors = sqliteTable(
     // optional grouping label for the dashboard + status page ("group" is a
     // SQL reserved word, so the column is group_name)
     group: text("group_name"),
+    // optional parent monitor (P6): while the parent has an open availability
+    // incident, this monitor's incidents are suppressed to avoid an alert flood
+    // for everything behind a downed dependency.
+    dependsOn: integer("depends_on").references(
+      (): AnySQLiteColumn => monitors.id,
+      { onDelete: "set null" },
+    ),
     nextCheckAt: ts("next_check_at"),
     lastStatus: text("last_status"),
     // Alert threshold overrides (null = inherit global alert_settings)
@@ -214,6 +222,13 @@ export const incidents = sqliteTable(
     // how many alerts fired (open + reminders + escalations).
     lastNotifiedAt: integer("last_notified_at", { mode: "timestamp" }),
     notifyCount: integer("notify_count").notNull().default(0),
+    // Acknowledge / snooze (P3): an acked incident stops renotifying; a snoozed
+    // incident stops until snoozedUntil passes.
+    ackedAt: integer("acked_at", { mode: "timestamp" }),
+    ackedBy: text("acked_by"),
+    snoozedUntil: integer("snoozed_until", { mode: "timestamp" }),
+    // Escalation (P4): how many ordered policy steps have already fired.
+    escalationStep: integer("escalation_step").notNull().default(0),
   },
   (t) => [index("incidents_monitor_open_idx").on(t.monitorId, t.resolved)],
 );
@@ -244,6 +259,85 @@ export const notificationChannels = sqliteTable("notification_channels", {
   kind: text("kind").notNull(),
   config: text("config", { mode: "json" }).notNull(),
   enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  createdAt: ts("created_at"),
+});
+
+// Per-channel routing rules (P2). A channel with NO routes fires for every
+// monitor/severity (backward-compatible default). A channel with routes fires
+// only when at least one route matches the event.
+export const channelRoutes = sqliteTable("channel_routes", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  channelId: integer("channel_id")
+    .notNull()
+    .references(() => notificationChannels.id, { onDelete: "cascade" }),
+  // "all" (any monitor) | "group" (targetId = group name) | "monitor" (targetId = monitor id)
+  scope: text("scope").notNull().default("all"),
+  targetId: text("target_id"),
+  // minimum severity that fires this route: "warning" (all) | "critical" (only crit)
+  minSeverity: text("min_severity").notNull().default("warning"),
+  // restrict to specific alert kinds; null/empty = all kinds
+  alertKinds: text("alert_kinds", { mode: "json" }).$type<string[]>(),
+  createdAt: ts("created_at"),
+});
+
+// Escalation policies (P4). A policy is an ordered set of time-delayed steps;
+// each step notifies one channel N minutes after an incident opens if it is
+// still unacknowledged. At most one policy is active at a time (global).
+export const escalationPolicies = sqliteTable("escalation_policies", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  active: integer("active", { mode: "boolean" }).notNull().default(false),
+  createdAt: ts("created_at"),
+});
+
+export const escalationSteps = sqliteTable("escalation_steps", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  policyId: integer("policy_id")
+    .notNull()
+    .references(() => escalationPolicies.id, { onDelete: "cascade" }),
+  // minutes after the incident opened at which this step fires
+  afterMinutes: integer("after_minutes").notNull(),
+  // a step targets EITHER a fixed channel OR an on-call schedule (P5), which
+  // resolves to whoever is on call at fire time. Exactly one is set.
+  channelId: integer("channel_id").references(() => notificationChannels.id, {
+    onDelete: "cascade",
+  }),
+  scheduleId: integer("schedule_id").references(() => oncallSchedules.id, {
+    onDelete: "cascade",
+  }),
+  createdAt: ts("created_at"),
+});
+
+// On-call (P5). A responder is a person mapped to their contact channel. A
+// schedule rotates over an ordered list of responders every `rotationDays`,
+// counting from `anchorAt`. An escalation step can target a schedule instead of
+// a fixed channel, resolving to the current on-call responder's channel.
+export const responders = sqliteTable("responders", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  channelId: integer("channel_id")
+    .notNull()
+    .references(() => notificationChannels.id, { onDelete: "cascade" }),
+  createdAt: ts("created_at"),
+});
+
+export const oncallSchedules = sqliteTable("oncall_schedules", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  rotationDays: integer("rotation_days").notNull().default(7),
+  anchorAt: integer("anchor_at", { mode: "timestamp" }).notNull(),
+  createdAt: ts("created_at"),
+});
+
+export const oncallMembers = sqliteTable("oncall_members", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  scheduleId: integer("schedule_id")
+    .notNull()
+    .references(() => oncallSchedules.id, { onDelete: "cascade" }),
+  responderId: integer("responder_id")
+    .notNull()
+    .references(() => responders.id, { onDelete: "cascade" }),
+  position: integer("position").notNull().default(0),
   createdAt: ts("created_at"),
 });
 
@@ -339,6 +433,12 @@ export type Check = typeof checks.$inferSelect;
 export type NewCheck = typeof checks.$inferInsert;
 export type Incident = typeof incidents.$inferSelect;
 export type NotificationChannel = typeof notificationChannels.$inferSelect;
+export type ChannelRoute = typeof channelRoutes.$inferSelect;
+export type EscalationPolicy = typeof escalationPolicies.$inferSelect;
+export type EscalationStep = typeof escalationSteps.$inferSelect;
+export type Responder = typeof responders.$inferSelect;
+export type OncallSchedule = typeof oncallSchedules.$inferSelect;
+export type OncallMember = typeof oncallMembers.$inferSelect;
 export type MaintenanceWindow = typeof maintenanceWindows.$inferSelect;
 export type AlertSettings = typeof alertSettings.$inferSelect;
 export type MonitorService = typeof monitorServices.$inferSelect;

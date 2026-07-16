@@ -1,12 +1,14 @@
 import tls from "node:tls";
 import { getDb, schema } from "@/lib/db/client";
-import { and, eq, lte, desc, inArray } from "drizzle-orm";
+import { and, asc, eq, lte, desc, inArray } from "drizzle-orm";
 import { parseHealth, type ParsedHealth } from "./parser";
 import { evaluateHttp, evaluateJson } from "./check-eval";
 import { parsePromText, selectSample, type PromSample } from "./prom-parse";
 import { buildAuthHeaders } from "./auth-header";
 import { isMonitorMuted } from "./maintenance";
-import { dispatch } from "./notifier";
+import { dispatch, dispatchToChannel } from "./notifier";
+import { dueEscalationSteps, type EscStep } from "./escalation";
+import { currentOnCallIndex } from "./oncall";
 import { getEffectiveThresholds } from "./alerts";
 import {
   evaluateRules,
@@ -568,6 +570,84 @@ async function syncServiceRegistry(
  * Opens incidents that should exist, resolves ones that no longer apply,
  * and refreshes metric/reason on ones that persist.
  */
+/** Steps of the single active escalation policy (P4), or [] if none is active. */
+async function loadActiveEscalationSteps(): Promise<EscStep[]> {
+  const db = getDb();
+  const [policy] = await db
+    .select({ id: schema.escalationPolicies.id })
+    .from(schema.escalationPolicies)
+    .where(eq(schema.escalationPolicies.active, true));
+  if (!policy) return [];
+  const steps = await db
+    .select({
+      afterMinutes: schema.escalationSteps.afterMinutes,
+      channelId: schema.escalationSteps.channelId,
+      scheduleId: schema.escalationSteps.scheduleId,
+    })
+    .from(schema.escalationSteps)
+    .where(eq(schema.escalationSteps.policyId, policy.id));
+  return steps;
+}
+
+/**
+ * Resolve an escalation step to the channel id it should page right now: its
+ * fixed channel, or the on-call responder for its schedule (P5). Null if the
+ * schedule is empty / missing.
+ */
+async function resolveStepChannel(
+  step: EscStep,
+  now: Date,
+): Promise<number | null> {
+  if (step.channelId != null) return step.channelId;
+  if (step.scheduleId == null) return null;
+  const db = getDb();
+  const [sched] = await db
+    .select({
+      rotationDays: schema.oncallSchedules.rotationDays,
+      anchorAt: schema.oncallSchedules.anchorAt,
+    })
+    .from(schema.oncallSchedules)
+    .where(eq(schema.oncallSchedules.id, step.scheduleId));
+  if (!sched) return null;
+  const members = await db
+    .select({
+      channelId: schema.responders.channelId,
+      position: schema.oncallMembers.position,
+    })
+    .from(schema.oncallMembers)
+    .innerJoin(
+      schema.responders,
+      eq(schema.oncallMembers.responderId, schema.responders.id),
+    )
+    .where(eq(schema.oncallMembers.scheduleId, step.scheduleId))
+    .orderBy(asc(schema.oncallMembers.position), asc(schema.oncallMembers.id));
+  const idx = currentOnCallIndex(
+    members.length,
+    sched.rotationDays,
+    sched.anchorAt.getTime(),
+    now.getTime(),
+  );
+  return idx == null ? null : members[idx].channelId;
+}
+
+/** True if the parent monitor currently has an open availability incident (P6). */
+async function isDependencyDown(parentId: number | null): Promise<boolean> {
+  if (parentId == null) return false;
+  const db = getDb();
+  const [open] = await db
+    .select({ id: schema.incidents.id })
+    .from(schema.incidents)
+    .where(
+      and(
+        eq(schema.incidents.monitorId, parentId),
+        eq(schema.incidents.kind, "availability"),
+        eq(schema.incidents.resolved, false),
+      ),
+    )
+    .limit(1);
+  return !!open;
+}
+
 async function reconcileIncidents(
   monitor: Monitor,
   result: FetchResult,
@@ -578,6 +658,13 @@ async function reconcileIncidents(
 ): Promise<void> {
   const db = getDb();
   const thresholds = await getEffectiveThresholds(monitor);
+  const escalationSteps = await loadActiveEscalationSteps();
+  // Dependency suppression (P6): if this monitor's parent is currently down
+  // (has an open availability incident), suppress this monitor's incidents so a
+  // downed dependency does not fan out into an alert storm. Transitive by
+  // construction — a suppressed parent still keeps its own incident open.
+  const depSuppressed = await isDependencyDown(monitor.dependsOn);
+  const suppressed = muted || depSuppressed;
   const window = Math.max(thresholds.latencyWindow, thresholds.downForMinutes + 2, 10);
   const recentChecks = await loadRecentChecks(monitor.id, window);
 
@@ -642,24 +729,28 @@ async function reconcileIncidents(
   // Open new alerts.
   for (const [key, a] of desired) {
     if (open.has(key)) continue;
-    await db.insert(schema.incidents).values({
-      monitorId: monitor.id,
-      componentPath: a.componentPath ?? undefined,
-      kind: a.kind,
-      severity: a.severity,
-      metricValue: a.metricValue ?? undefined,
-      threshold: a.threshold ?? undefined,
-      reason: a.reason,
-      startedAt: now,
-      resolved: false,
-      suppressed: muted,
-      lastNotifiedAt: muted ? undefined : now,
-      notifyCount: muted ? 0 : 1,
-    });
-    if (!muted) {
+    const [inserted] = await db
+      .insert(schema.incidents)
+      .values({
+        monitorId: monitor.id,
+        componentPath: a.componentPath ?? undefined,
+        kind: a.kind,
+        severity: a.severity,
+        metricValue: a.metricValue ?? undefined,
+        threshold: a.threshold ?? undefined,
+        reason: a.reason,
+        startedAt: now,
+        resolved: false,
+        suppressed,
+        lastNotifiedAt: suppressed ? undefined : now,
+        notifyCount: suppressed ? 0 : 1,
+      })
+      .returning({ id: schema.incidents.id });
+    if (!suppressed) {
       await dispatch({
         kind: "down",
         monitor,
+        incidentId: inserted.id,
         componentPath: a.componentPath,
         startedAt: now,
         severity: a.severity,
@@ -683,6 +774,7 @@ async function reconcileIncidents(
         await dispatch({
           kind: "resolved",
           monitor,
+          incidentId: row.id,
           componentPath: row.componentPath,
           startedAt: row.startedAt,
           endedAt: now,
@@ -699,13 +791,21 @@ async function reconcileIncidents(
       // still-open critical. Suppressed (maintenance) incidents never re-notify.
       const escalated =
         row.severity !== "critical" && still.severity === "critical";
+      // Acknowledge / snooze (P3): both silence the renotify cadence. Escalation
+      // still re-alerts (the situation got worse) and resets the ack so reminders
+      // resume for the now-critical incident.
+      const acked = row.ackedAt != null;
+      const snoozed =
+        row.snoozedUntil != null && row.snoozedUntil.getTime() > now.getTime();
       const renotifyMs = thresholds.renotifyMinutes * 60_000;
       const dueRenotify =
         thresholds.renotifyMinutes > 0 &&
         still.severity === "critical" &&
+        !acked &&
+        !snoozed &&
         row.lastNotifiedAt != null &&
         now.getTime() - row.lastNotifiedAt.getTime() >= renotifyMs;
-      const notify = !row.suppressed && (escalated || dueRenotify);
+      const notify = !row.suppressed && !depSuppressed && (escalated || dueRenotify);
       await db
         .update(schema.incidents)
         .set({
@@ -713,6 +813,7 @@ async function reconcileIncidents(
           threshold: still.threshold ?? undefined,
           reason: still.reason,
           severity: still.severity,
+          ...(escalated ? { ackedAt: null, ackedBy: null, snoozedUntil: null } : {}),
           ...(notify
             ? { lastNotifiedAt: now, notifyCount: row.notifyCount + 1 }
             : {}),
@@ -722,6 +823,7 @@ async function reconcileIncidents(
         await dispatch({
           kind: "down",
           monitor,
+          incidentId: row.id,
           componentPath: row.componentPath,
           startedAt: row.startedAt,
           severity: still.severity,
@@ -732,6 +834,49 @@ async function reconcileIncidents(
           repeat: !escalated,
           escalated,
         });
+      }
+
+      // Escalation (P4): page additional channels on a time ladder while a
+      // critical incident stays open and unacknowledged. Ack/snooze pause it.
+      if (
+        escalationSteps.length > 0 &&
+        !row.suppressed &&
+        !depSuppressed &&
+        !acked &&
+        !snoozed &&
+        still.severity === "critical"
+      ) {
+        const minutesSinceStart =
+          (now.getTime() - row.startedAt.getTime()) / 60_000;
+        const { due, firedCount } = dueEscalationSteps(
+          escalationSteps,
+          minutesSinceStart,
+          row.escalationStep,
+        );
+        if (due.length > 0) {
+          await db
+            .update(schema.incidents)
+            .set({ escalationStep: firedCount })
+            .where(eq(schema.incidents.id, row.id));
+          for (const step of due) {
+            const targetChannel = await resolveStepChannel(step, now);
+            if (targetChannel == null) continue; // empty schedule / missing channel
+            await dispatchToChannel(targetChannel, {
+              kind: "down",
+              monitor,
+              incidentId: row.id,
+              componentPath: row.componentPath,
+              startedAt: row.startedAt,
+              severity: still.severity,
+              alertKind: still.kind,
+              reason: still.reason,
+              metricValue: still.metricValue,
+              threshold: still.threshold,
+              repeat: true,
+              escalated: false,
+            });
+          }
+        }
       }
     }
   }

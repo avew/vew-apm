@@ -2,9 +2,14 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
-export function MonitorForm() {
+export function MonitorForm({
+  monitors = [],
+}: {
+  monitors?: { id: number; name: string }[];
+}) {
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
+  const [dependsOn, setDependsOn] = useState("");
   const [intervalSeconds, setInterval] = useState(60);
   const [timeoutMs, setTimeoutMs] = useState(10000);
   const [authType, setAuthType] = useState<"none" | "basic" | "header" | "bearer">("none");
@@ -81,6 +86,7 @@ export function MonitorForm() {
             authHeaderValue:
               authType !== "none" ? authHeaderValue || undefined : undefined,
             group: group.trim() || undefined,
+            dependsOn: dependsOn ? Number(dependsOn) : undefined,
             type,
             expectStatus: type === "http" ? expectStatus.trim() || undefined : undefined,
             keyword:
@@ -222,6 +228,25 @@ export function MonitorForm() {
           placeholder="e.g. core, billing"
         />
       </Field>
+      {monitors.length > 0 && (
+        <Field label="Depends on (optional)">
+          <select
+            className="field-input"
+            value={dependsOn}
+            onChange={(e) => setDependsOn(e.target.value)}
+          >
+            <option value="">None</option>
+            {monitors.map((m) => (
+              <option key={m.id} value={String(m.id)}>
+                {m.name}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-[var(--muted)] mt-1">
+            While the parent is down, this monitor&apos;s alerts are suppressed.
+          </p>
+        </Field>
+      )}
       <Field label="Authentication">
         <select
           className="field-input"

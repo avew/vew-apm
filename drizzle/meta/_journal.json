@@ -85,6 +85,41 @@
       "when": 1784176811858,
       "tag": "0011_perfect_grey_gargoyle",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1784191584618,
+      "tag": "0012_cynical_killmonger",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1784191928675,
+      "tag": "0013_overrated_justice",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1784192150785,
+      "tag": "0014_productive_texas_twister",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1784192710832,
+      "tag": "0015_curved_lilandra",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1784193295858,
+      "tag": "0016_eager_typhoid_mary",
+      "breakpoints": true
     }
   ]
 }

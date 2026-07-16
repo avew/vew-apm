@@ -3,7 +3,15 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { X, Eye, EyeOff } from "lucide-react";
 
-type Kind = "telegram" | "webhook" | "email";
+type Kind =
+  | "telegram"
+  | "webhook"
+  | "email"
+  | "slack"
+  | "discord"
+  | "teams"
+  | "pagerduty"
+  | "opsgenie";
 
 const cls = "field-input !mt-1";
 
@@ -87,6 +95,19 @@ export function NotificationModal({
   const [whUsername, setWhUsername] = useState(str(cfg.authUsername));
   const [whHeaderName, setWhHeaderName] = useState(str(cfg.authHeaderName));
   const [whAuthValue, setWhAuthValue] = useState("");
+  // slack / discord / teams — all use an incoming-webhook URL (secret, blank in edit)
+  const [hookUrl, setHookUrl] = useState("");
+  const [showHookUrl, setShowHookUrl] = useState(false);
+  const [hookUsername, setHookUsername] = useState(str(cfg.username)); // slack + discord
+  const [slackIcon, setSlackIcon] = useState(str(cfg.iconEmoji)); // slack only
+  // pagerduty (routingKey secret) / opsgenie (apiKey secret)
+  const [pdRoutingKey, setPdRoutingKey] = useState("");
+  const [showPdKey, setShowPdKey] = useState(false);
+  const [ogApiKey, setOgApiKey] = useState("");
+  const [showOgKey, setShowOgKey] = useState(false);
+  const [ogRegion, setOgRegion] = useState<"us" | "eu">(
+    (str(cfg.region) as "us" | "eu") || "us",
+  );
   // email (apiKey is secret — always starts blank in edit)
   const [emailApiKey, setEmailApiKey] = useState("");
   const [showApiKey, setShowApiKey] = useState(false);
@@ -123,6 +144,35 @@ export function NotificationModal({
           : {}),
         // include the secret only when typed; blank on edit keeps the stored one
         ...(whAuthValue.trim() ? { authHeaderValue: whAuthValue.trim() } : {}),
+      };
+    }
+    if (kind === "slack" || kind === "discord" || kind === "teams") {
+      // secret required only when creating; on edit a blank URL keeps the old one
+      if (!isEdit && !hookUrl.trim()) return null;
+      const base = hookUrl.trim() ? { webhookUrl: hookUrl.trim() } : {};
+      if (kind === "teams") return { ...base };
+      if (kind === "discord") {
+        return {
+          ...base,
+          ...(hookUsername.trim() ? { username: hookUsername.trim() } : {}),
+        };
+      }
+      // slack
+      return {
+        ...base,
+        ...(hookUsername.trim() ? { username: hookUsername.trim() } : {}),
+        ...(slackIcon.trim() ? { iconEmoji: slackIcon.trim() } : {}),
+      };
+    }
+    if (kind === "pagerduty") {
+      if (!isEdit && !pdRoutingKey.trim()) return null;
+      return pdRoutingKey.trim() ? { routingKey: pdRoutingKey.trim() } : {};
+    }
+    if (kind === "opsgenie") {
+      if (!isEdit && !ogApiKey.trim()) return null;
+      return {
+        ...(ogApiKey.trim() ? { apiKey: ogApiKey.trim() } : {}),
+        region: ogRegion,
       };
     }
     // email
@@ -219,6 +269,11 @@ export function NotificationModal({
               onChange={(e) => setKind(e.target.value as Kind)}
             >
               <option value="telegram">Telegram</option>
+              <option value="slack">Slack</option>
+              <option value="discord">Discord</option>
+              <option value="teams">Microsoft Teams</option>
+              <option value="pagerduty">PagerDuty</option>
+              <option value="opsgenie">Opsgenie</option>
               <option value="webhook">Webhook</option>
               <option value="email">Email (via Resend)</option>
             </select>
@@ -335,6 +390,173 @@ export function NotificationModal({
                 label="Protect Forwarding/Saving"
                 hint="Messages protected from forwarding and saving."
               />
+            </>
+          )}
+
+          {(kind === "slack" || kind === "discord" || kind === "teams") && (
+            <>
+              <label className="block text-sm">
+                <span className="font-medium">Incoming Webhook URL</span>
+                <div className="relative">
+                  <input
+                    className={`${cls} pr-10`}
+                    type={showHookUrl ? "text" : "password"}
+                    value={hookUrl}
+                    placeholder={
+                      isEdit
+                        ? "leave blank to keep current"
+                        : kind === "slack"
+                          ? "https://hooks.slack.com/services/…"
+                          : kind === "discord"
+                            ? "https://discord.com/api/webhooks/…"
+                            : "https://….webhook.office.com/…"
+                    }
+                    onChange={(e) => setHookUrl(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowHookUrl((s) => !s)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--foreground)]"
+                  >
+                    {showHookUrl ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <span className="text-xs text-[var(--muted)]">
+                  {kind === "slack" && (
+                    <>
+                      Create one under{" "}
+                      <a
+                        href="https://api.slack.com/messaging/webhooks"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[var(--color-brand-600)] hover:underline"
+                      >
+                        Incoming Webhooks
+                      </a>{" "}
+                      for the channel you want alerts in.
+                    </>
+                  )}
+                  {kind === "discord" && (
+                    <>
+                      Server Settings → Integrations →{" "}
+                      <a
+                        href="https://support.discord.com/hc/en-us/articles/228383668"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[var(--color-brand-600)] hover:underline"
+                      >
+                        Webhooks
+                      </a>{" "}
+                      → New Webhook, then copy the URL.
+                    </>
+                  )}
+                  {kind === "teams" && (
+                    <>
+                      Add an{" "}
+                      <a
+                        href="https://learn.microsoft.com/microsoftteams/platform/webhooks-and-connectors/how-to/add-incoming-webhook"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[var(--color-brand-600)] hover:underline"
+                      >
+                        Incoming Webhook
+                      </a>{" "}
+                      to the channel and paste its URL.
+                    </>
+                  )}
+                </span>
+              </label>
+              {(kind === "slack" || kind === "discord") && (
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block text-sm">
+                    <span className="font-medium">Display name</span>
+                    <span className="text-[var(--muted)]"> (optional)</span>
+                    <input
+                      className={cls}
+                      value={hookUsername}
+                      onChange={(e) => setHookUsername(e.target.value)}
+                      placeholder="Vew APM"
+                    />
+                  </label>
+                  {kind === "slack" && (
+                    <label className="block text-sm">
+                      <span className="font-medium">Icon emoji</span>
+                      <span className="text-[var(--muted)]"> (optional)</span>
+                      <input
+                        className={cls}
+                        value={slackIcon}
+                        onChange={(e) => setSlackIcon(e.target.value)}
+                        placeholder=":rotating_light:"
+                      />
+                    </label>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
+          {kind === "pagerduty" && (
+            <label className="block text-sm">
+              <span className="font-medium">Integration / Routing Key</span>
+              <div className="relative">
+                <input
+                  className={`${cls} pr-10`}
+                  type={showPdKey ? "text" : "password"}
+                  value={pdRoutingKey}
+                  placeholder={isEdit ? "leave blank to keep current" : "Events API v2 routing key"}
+                  onChange={(e) => setPdRoutingKey(e.target.value)}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPdKey((s) => !s)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--foreground)]"
+                >
+                  {showPdKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <span className="text-xs text-[var(--muted)]">
+                Create an <b>Events API v2</b> integration on a PagerDuty service
+                and paste its integration key. Incidents map to trigger / resolve.
+              </span>
+            </label>
+          )}
+
+          {kind === "opsgenie" && (
+            <>
+              <label className="block text-sm">
+                <span className="font-medium">API Key</span>
+                <div className="relative">
+                  <input
+                    className={`${cls} pr-10`}
+                    type={showOgKey ? "text" : "password"}
+                    value={ogApiKey}
+                    placeholder={isEdit ? "leave blank to keep current" : "Opsgenie API integration key"}
+                    onChange={(e) => setOgApiKey(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowOgKey((s) => !s)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--foreground)]"
+                  >
+                    {showOgKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <span className="text-xs text-[var(--muted)]">
+                  From an <b>API</b> integration in Opsgenie. Incidents open and
+                  close an alert keyed by incident id.
+                </span>
+              </label>
+              <label className="block text-sm">
+                <span className="font-medium">Region</span>
+                <select
+                  className={cls}
+                  value={ogRegion}
+                  onChange={(e) => setOgRegion(e.target.value as "us" | "eu")}
+                >
+                  <option value="us">US (api.opsgenie.com)</option>
+                  <option value="eu">EU (api.eu.opsgenie.com)</option>
+                </select>
+              </label>
             </>
           )}
 

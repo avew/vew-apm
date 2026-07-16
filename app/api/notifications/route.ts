@@ -27,6 +27,25 @@ const TelegramConfig = z.object({
   protect: z.boolean().optional(),
   template: z.string().optional(),
 });
+const SlackConfig = z.object({
+  webhookUrl: z.string().url(),
+  username: z.string().max(80).optional(),
+  iconEmoji: z.string().max(80).optional(),
+});
+const DiscordConfig = z.object({
+  webhookUrl: z.string().url(),
+  username: z.string().max(80).optional(),
+});
+const TeamsConfig = z.object({
+  webhookUrl: z.string().url(),
+});
+const PagerDutyConfig = z.object({
+  routingKey: z.string().min(1).max(200),
+});
+const OpsgenieConfig = z.object({
+  apiKey: z.string().min(1).max(200),
+  region: z.enum(["us", "eu"]).optional(),
+});
 
 const common = {
   name: z.string().min(1),
@@ -37,6 +56,11 @@ const Body = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("webhook"), ...common, config: WebhookConfig }),
   z.object({ kind: z.literal("email"), ...common, config: EmailConfig }),
   z.object({ kind: z.literal("telegram"), ...common, config: TelegramConfig }),
+  z.object({ kind: z.literal("slack"), ...common, config: SlackConfig }),
+  z.object({ kind: z.literal("discord"), ...common, config: DiscordConfig }),
+  z.object({ kind: z.literal("teams"), ...common, config: TeamsConfig }),
+  z.object({ kind: z.literal("pagerduty"), ...common, config: PagerDutyConfig }),
+  z.object({ kind: z.literal("opsgenie"), ...common, config: OpsgenieConfig }),
 ]);
 
 export async function GET() {
