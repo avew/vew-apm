@@ -57,6 +57,8 @@ export default async function OncallPage() {
     )
     .orderBy(asc(schema.oncallMembers.position), asc(schema.oncallMembers.id));
 
+  // Server component: renders once per request, so Date.now() is stable here.
+  // eslint-disable-next-line react-hooks/purity
   const now = Date.now();
   const schedules: ScheduleRow[] = scheduleRows.map((s) => {
     const mem = memberRows.filter((m) => m.scheduleId === s.id);
