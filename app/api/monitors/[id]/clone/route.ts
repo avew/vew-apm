@@ -57,5 +57,25 @@ export async function POST(
     })
     .returning();
 
+  // Carry over prometheus metric rules so a cloned monitor keeps its alerts.
+  const rules = await db
+    .select()
+    .from(schema.metricRules)
+    .where(eq(schema.metricRules.monitorId, m.id));
+  if (rules.length > 0) {
+    await db.insert(schema.metricRules).values(
+      rules.map((r) => ({
+        monitorId: clone.id,
+        label: r.label,
+        metricName: r.metricName,
+        labelMatchers: r.labelMatchers,
+        operator: r.operator,
+        warnValue: r.warnValue,
+        critValue: r.critValue,
+        enabled: r.enabled,
+      })),
+    );
+  }
+
   return NextResponse.json({ id: clone.id }, { status: 201 });
 }

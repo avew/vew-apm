@@ -8,7 +8,7 @@ const CreateBody = z.object({
   name: z.string().min(1).max(120),
   url: z.string().url(),
   method: z.enum(["GET", "POST"]).default("GET"),
-  type: z.enum(["actuator", "http", "json"]).default("actuator"),
+  type: z.enum(["actuator", "http", "json", "prometheus"]).default("actuator"),
   expectStatus: z.string().max(20).nullish(),
   keyword: z.string().max(200).nullish(),
   statusPath: z.string().max(200).nullish(),

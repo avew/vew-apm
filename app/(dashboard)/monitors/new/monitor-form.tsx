@@ -12,7 +12,9 @@ export function MonitorForm() {
   const [authHeaderName, setAuthName] = useState("");
   const [authHeaderValue, setAuthValue] = useState("");
   const [group, setGroup] = useState("");
-  const [type, setType] = useState<"actuator" | "http" | "json">("actuator");
+  const [type, setType] = useState<"actuator" | "http" | "json" | "prometheus">(
+    "actuator",
+  );
   const [expectStatus, setExpectStatus] = useState("");
   const [keyword, setKeyword] = useState("");
   const [statusPath, setStatusPath] = useState("$.status");
@@ -153,6 +155,7 @@ export function MonitorForm() {
           <option value="actuator">Spring actuator (parse health tree)</option>
           <option value="http">HTTP (up = 2xx, optional keyword)</option>
           <option value="json">JSON (status from a path you pick)</option>
+          <option value="prometheus">Prometheus (scrape metrics + threshold rules)</option>
         </select>
       </Field>
 
@@ -179,6 +182,14 @@ export function MonitorForm() {
             <input className="field-input" value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="optional" />
           </Field>
         </div>
+      )}
+
+      {type === "prometheus" && (
+        <p className="text-xs text-[var(--muted)] -mt-2">
+          Point the URL at a Prometheus text endpoint (e.g. <code>/actuator/prometheus</code>).
+          The monitor is UP when reachable; add <strong>metric threshold rules</strong> on the
+          monitor&apos;s detail page after creating it.
+        </p>
       )}
 
       {type !== "actuator" && (

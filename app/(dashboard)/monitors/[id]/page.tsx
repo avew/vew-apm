@@ -14,6 +14,7 @@ import { PublicToggle } from "./public-toggle";
 import { ComponentTree } from "./component-tree";
 import { HealthProbes } from "./health-probes";
 import { ServiceRegistry } from "./service-registry";
+import { MetricRulesClient } from "./metric-rules-client";
 import { AutoRefresh } from "../../auto-refresh";
 import {
   ChevronLeft,
@@ -24,6 +25,7 @@ import {
   FileText,
   AlertTriangle,
   Network,
+  Gauge,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -131,6 +133,38 @@ async function loadServiceRegistry(monitorId: number) {
     .orderBy(schema.monitorServices.serviceName);
 }
 
+async function loadMetricRules(monitorId: number) {
+  const db = getDb();
+  return db
+    .select()
+    .from(schema.metricRules)
+    .where(eq(schema.metricRules.monitorId, monitorId))
+    .orderBy(schema.metricRules.id);
+}
+
+// ruleId → 24h series for the per-rule chart.
+async function loadMetricSeries(
+  monitorId: number,
+): Promise<Record<number, { t: number; value: number }[]>> {
+  const db = getDb();
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const rows = await db
+    .select({
+      ruleId: schema.metricSamples.ruleId,
+      checkedAt: schema.checks.checkedAt,
+      value: schema.metricSamples.value,
+    })
+    .from(schema.metricSamples)
+    .innerJoin(schema.checks, eq(schema.metricSamples.checkId, schema.checks.id))
+    .where(and(eq(schema.checks.monitorId, monitorId), gte(schema.checks.checkedAt, since)))
+    .orderBy(schema.checks.checkedAt);
+  const series: Record<number, { t: number; value: number }[]> = {};
+  for (const r of rows) {
+    (series[r.ruleId] ??= []).push({ t: new Date(r.checkedAt).getTime(), value: r.value });
+  }
+  return series;
+}
+
 const KIND_LABEL: Record<string, string> = {
   availability: "Availability",
   disk: "Disk usage",
@@ -138,6 +172,7 @@ const KIND_LABEL: Record<string, string> = {
   component_down: "Component down",
   eureka: "Eureka",
   service_missing: "Service missing",
+  metric: "Metric",
   down: "Down",
 };
 
@@ -194,6 +229,9 @@ export default async function MonitorDetail({
     loadAlertSettings(),
   ]);
   const registry = await loadServiceRegistry(monitorId);
+  const isProm = monitor.type === "prometheus";
+  const metricRules = isProm ? await loadMetricRules(monitorId) : [];
+  const metricSeries = isProm ? await loadMetricSeries(monitorId) : {};
   const propertySources = propertySourcesFrom(
     components as { path: string; details: unknown }[],
   );
@@ -276,7 +314,7 @@ export default async function MonitorDetail({
             intervalSeconds={monitor.intervalSeconds}
             group={monitor.group}
             check={{
-              type: monitor.type as "actuator" | "http" | "json",
+              type: monitor.type as "actuator" | "http" | "json" | "prometheus",
               expectStatus: monitor.expectStatus,
               keyword: monitor.keyword,
               statusPath: monitor.statusPath,
@@ -358,6 +396,27 @@ export default async function MonitorDetail({
             }))}
         />
       </section>
+
+      {monitor.type === "prometheus" && (
+        <section className="card p-5">
+          <SectionHeader icon={Gauge} title="Metrics" />
+          <MetricRulesClient
+            monitorId={monitorId}
+            url={monitor.url}
+            initial={metricRules.map((r) => ({
+              id: r.id,
+              label: r.label,
+              metricName: r.metricName,
+              labelMatchers: (r.labelMatchers as Record<string, string> | null) ?? null,
+              operator: r.operator as "gt" | "gte" | "lt" | "lte",
+              warnValue: r.warnValue,
+              critValue: r.critValue,
+              enabled: r.enabled,
+            }))}
+            series={metricSeries}
+          />
+        </section>
+      )}
 
       {monitor.type === "actuator" && (
         <>

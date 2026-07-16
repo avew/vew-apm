@@ -62,9 +62,11 @@ beforeAll(async () => {
         return new Response("ok", { status: 200 });
       }
       lastHeaders = (init?.headers as Record<string, string>) ?? {};
-      return new Response(JSON.stringify(healthBody), {
+      // A string body is returned raw (e.g. Prometheus text); objects → JSON.
+      const isText = typeof healthBody === "string";
+      return new Response(isText ? (healthBody as string) : JSON.stringify(healthBody), {
         status: healthStatus,
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": isText ? "text/plain" : "application/json" },
       });
     }),
   );
@@ -462,5 +464,69 @@ describe("service snapshot delta storage", () => {
       .from(schema.checks)
       .where(eq(schema.checks.monitorId, m.id));
     expect(checks).toHaveLength(3);
+  });
+});
+
+describe("prometheus monitor", () => {
+  it("stores a metric sample and opens a critical metric incident on breach", async () => {
+    healthBody = 'jvm_memory_used_bytes{area="heap"} 1500000000\nhikaricp_connections_active 12\n';
+    const m = await createMonitor({ type: "prometheus" });
+    const [rule] = await getDb()
+      .insert(schema.metricRules)
+      .values({
+        monitorId: m.id,
+        label: "heap used",
+        metricName: "jvm_memory_used_bytes",
+        labelMatchers: { area: "heap" },
+        operator: "gt",
+        warnValue: 500_000_000,
+        critValue: 1_000_000_000,
+        enabled: true,
+      })
+      .returning();
+
+    await runCheck(m);
+
+    const samples = await getDb()
+      .select()
+      .from(schema.metricSamples)
+      .where(eq(schema.metricSamples.ruleId, rule.id));
+    expect(samples).toHaveLength(1);
+    expect(samples[0].value).toBe(1_500_000_000);
+
+    const inc = (await incidentsFor(m.id)).find((i) => i.kind === "metric");
+    expect(inc?.severity).toBe("critical");
+    expect(inc?.componentPath).toBe("heap used");
+    expect(webhookCalls.some((w) => w.alertKind === "metric")).toBe(true);
+
+    const [mon] = await getDb().select().from(schema.monitors).where(eq(schema.monitors.id, m.id));
+    expect(mon.lastStatus).toBe("UP"); // metric breach does not mark the monitor down
+  });
+
+  it("stores the sample but opens no incident when under thresholds", async () => {
+    healthBody = "hikaricp_connections_active 3\n";
+    const m = await createMonitor({ type: "prometheus" });
+    const [rule] = await getDb()
+      .insert(schema.metricRules)
+      .values({
+        monitorId: m.id,
+        label: "active conns",
+        metricName: "hikaricp_connections_active",
+        operator: "gt",
+        warnValue: 40,
+        critValue: 45,
+        enabled: true,
+      })
+      .returning();
+
+    await runCheck(m);
+
+    const samples = await getDb()
+      .select()
+      .from(schema.metricSamples)
+      .where(eq(schema.metricSamples.ruleId, rule.id));
+    expect(samples).toHaveLength(1);
+    expect(samples[0].value).toBe(3);
+    expect((await incidentsFor(m.id)).find((i) => i.kind === "metric")).toBeUndefined();
   });
 });

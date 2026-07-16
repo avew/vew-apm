@@ -21,6 +21,7 @@ export const monitors = sqliteTable(
     url: text("url").notNull(),
     method: text("method").notNull().default("GET"),
     // "actuator" (Spring health tree) | "http" (2xx + keyword) | "json" (JSON path)
+    // | "prometheus" (scrape a metrics endpoint; alert via metric_rules)
     type: text("type").notNull().default("actuator"),
     expectStatus: text("expect_status"), // http: e.g. "2xx" | "200" | "200-204"
     keyword: text("keyword"), // http/json: body must contain this
@@ -127,6 +128,46 @@ export const serviceSnapshots = sqliteTable(
     instanceCount: integer("instance_count").notNull().default(1),
   },
   (t) => [index("svc_check_source_idx").on(t.checkId, t.source)],
+);
+
+// Per-monitor Prometheus metric alert rules (for monitors of type "prometheus").
+// Each rule selects one sample (metricName + label matchers) and compares it to a
+// warn/crit threshold with an operator. Thresholds live here, NOT in
+// alert_settings, because they're metric-specific, not global.
+export const metricRules = sqliteTable(
+  "metric_rules",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    monitorId: integer("monitor_id")
+      .notNull()
+      .references(() => monitors.id, { onDelete: "cascade" }),
+    label: text("label").notNull(), // friendly name shown on the incident + chart
+    metricName: text("metric_name").notNull(), // e.g. jvm_memory_used_bytes
+    labelMatchers: text("label_matchers", { mode: "json" }), // Record<string,string> | null
+    operator: text("operator").notNull().default("gt"), // gt | gte | lt | lte
+    warnValue: real("warn_value"),
+    critValue: real("crit_value"),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    createdAt: ts("created_at"),
+  },
+  (t) => [index("metric_rules_monitor_idx").on(t.monitorId)],
+);
+
+// Per-check time series of watched metric values (one row per enabled rule per
+// check). Mirrors disk_snapshots; pruned with checks via the FK cascade.
+export const metricSamples = sqliteTable(
+  "metric_samples",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    checkId: integer("check_id")
+      .notNull()
+      .references(() => checks.id, { onDelete: "cascade" }),
+    ruleId: integer("rule_id")
+      .notNull()
+      .references(() => metricRules.id, { onDelete: "cascade" }),
+    value: real("value").notNull(),
+  },
+  (t) => [index("metric_samples_check_idx").on(t.checkId)],
 );
 
 export const incidents = sqliteTable(
