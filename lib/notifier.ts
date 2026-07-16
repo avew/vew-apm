@@ -3,6 +3,9 @@ import { eq } from "drizzle-orm";
 import { sendWebhook, type WebhookConfig } from "./notifiers/webhook";
 import { sendEmail, type EmailConfig } from "./notifiers/email";
 import { sendTelegram, type TelegramConfig } from "./notifiers/telegram";
+import { sendSlack, type SlackConfig } from "./notifiers/slack";
+import { sendDiscord, type DiscordConfig } from "./notifiers/discord";
+import { sendTeams, type TeamsConfig } from "./notifiers/teams";
 import { withRetry } from "./retry";
 import { decryptSecret } from "./crypto";
 import type { Monitor } from "@/lib/db/schema";
@@ -55,6 +58,12 @@ function renderText(ev: Event): { subject: string; body: string } {
     subject: `[Vew APM][RESOLVED] ${ev.alertKind} — ${ev.monitor.name} (${scope})`,
     body: `✅ *${ev.monitor.name}* recovered: *${ev.alertKind}*\nURL: ${ev.monitor.url}\nScope: ${scope}\nStarted: ${ev.startedAt.toISOString()}\nEnded:   ${ev.endedAt.toISOString()}\nDuration: ${Math.round((ev.endedAt.getTime() - ev.startedAt.getTime()) / 1000)}s`,
   };
+}
+
+/** Chat-card accent color by event state: green resolved, red critical, amber warning. */
+function severityColor(ev: Event): string {
+  if (ev.kind === "resolved") return "#22c55e";
+  return ev.severity === "critical" ? "#ef4444" : "#f59e0b";
 }
 
 /** Notifications are global: every enabled channel fires for every monitor. */
@@ -110,6 +119,24 @@ export async function dispatch(ev: Event): Promise<void> {
                 .replaceAll("{{component}}", ev.componentPath ?? "overall")
             : `*${subject}*\n\n${body}`;
           await sendTelegram(tg, text);
+        } else if (c.kind === "slack") {
+          await sendSlack(cfg as unknown as SlackConfig, {
+            title: subject,
+            text: body,
+            color: severityColor(ev),
+          });
+        } else if (c.kind === "discord") {
+          await sendDiscord(cfg as unknown as DiscordConfig, {
+            title: subject,
+            text: body,
+            color: severityColor(ev),
+          });
+        } else if (c.kind === "teams") {
+          await sendTeams(cfg as unknown as TeamsConfig, {
+            title: subject,
+            text: body,
+            color: severityColor(ev),
+          });
         }
       };
       try {
@@ -142,6 +169,12 @@ export async function sendTestConfig(
     await sendEmail(cfg as unknown as EmailConfig, subject, body);
   } else if (kind === "telegram") {
     await sendTelegram(cfg as unknown as TelegramConfig, `*${subject}*\n\n${body}`);
+  } else if (kind === "slack") {
+    await sendSlack(cfg as unknown as SlackConfig, { title: subject, text: body });
+  } else if (kind === "discord") {
+    await sendDiscord(cfg as unknown as DiscordConfig, { title: subject, text: body });
+  } else if (kind === "teams") {
+    await sendTeams(cfg as unknown as TeamsConfig, { title: subject, text: body });
   } else {
     throw new Error(`unknown channel kind: ${kind}`);
   }

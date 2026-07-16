@@ -3,7 +3,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { X, Eye, EyeOff } from "lucide-react";
 
-type Kind = "telegram" | "webhook" | "email";
+type Kind = "telegram" | "webhook" | "email" | "slack" | "discord" | "teams";
 
 const cls = "field-input !mt-1";
 
@@ -87,6 +87,11 @@ export function NotificationModal({
   const [whUsername, setWhUsername] = useState(str(cfg.authUsername));
   const [whHeaderName, setWhHeaderName] = useState(str(cfg.authHeaderName));
   const [whAuthValue, setWhAuthValue] = useState("");
+  // slack / discord / teams — all use an incoming-webhook URL (secret, blank in edit)
+  const [hookUrl, setHookUrl] = useState("");
+  const [showHookUrl, setShowHookUrl] = useState(false);
+  const [hookUsername, setHookUsername] = useState(str(cfg.username)); // slack + discord
+  const [slackIcon, setSlackIcon] = useState(str(cfg.iconEmoji)); // slack only
   // email (apiKey is secret — always starts blank in edit)
   const [emailApiKey, setEmailApiKey] = useState("");
   const [showApiKey, setShowApiKey] = useState(false);
@@ -123,6 +128,24 @@ export function NotificationModal({
           : {}),
         // include the secret only when typed; blank on edit keeps the stored one
         ...(whAuthValue.trim() ? { authHeaderValue: whAuthValue.trim() } : {}),
+      };
+    }
+    if (kind === "slack" || kind === "discord" || kind === "teams") {
+      // secret required only when creating; on edit a blank URL keeps the old one
+      if (!isEdit && !hookUrl.trim()) return null;
+      const base = hookUrl.trim() ? { webhookUrl: hookUrl.trim() } : {};
+      if (kind === "teams") return { ...base };
+      if (kind === "discord") {
+        return {
+          ...base,
+          ...(hookUsername.trim() ? { username: hookUsername.trim() } : {}),
+        };
+      }
+      // slack
+      return {
+        ...base,
+        ...(hookUsername.trim() ? { username: hookUsername.trim() } : {}),
+        ...(slackIcon.trim() ? { iconEmoji: slackIcon.trim() } : {}),
       };
     }
     // email
@@ -219,6 +242,9 @@ export function NotificationModal({
               onChange={(e) => setKind(e.target.value as Kind)}
             >
               <option value="telegram">Telegram</option>
+              <option value="slack">Slack</option>
+              <option value="discord">Discord</option>
+              <option value="teams">Microsoft Teams</option>
               <option value="webhook">Webhook</option>
               <option value="email">Email (via Resend)</option>
             </select>
@@ -335,6 +361,108 @@ export function NotificationModal({
                 label="Protect Forwarding/Saving"
                 hint="Messages protected from forwarding and saving."
               />
+            </>
+          )}
+
+          {(kind === "slack" || kind === "discord" || kind === "teams") && (
+            <>
+              <label className="block text-sm">
+                <span className="font-medium">Incoming Webhook URL</span>
+                <div className="relative">
+                  <input
+                    className={`${cls} pr-10`}
+                    type={showHookUrl ? "text" : "password"}
+                    value={hookUrl}
+                    placeholder={
+                      isEdit
+                        ? "leave blank to keep current"
+                        : kind === "slack"
+                          ? "https://hooks.slack.com/services/…"
+                          : kind === "discord"
+                            ? "https://discord.com/api/webhooks/…"
+                            : "https://….webhook.office.com/…"
+                    }
+                    onChange={(e) => setHookUrl(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowHookUrl((s) => !s)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--foreground)]"
+                  >
+                    {showHookUrl ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <span className="text-xs text-[var(--muted)]">
+                  {kind === "slack" && (
+                    <>
+                      Create one under{" "}
+                      <a
+                        href="https://api.slack.com/messaging/webhooks"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[var(--color-brand-600)] hover:underline"
+                      >
+                        Incoming Webhooks
+                      </a>{" "}
+                      for the channel you want alerts in.
+                    </>
+                  )}
+                  {kind === "discord" && (
+                    <>
+                      Server Settings → Integrations →{" "}
+                      <a
+                        href="https://support.discord.com/hc/en-us/articles/228383668"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[var(--color-brand-600)] hover:underline"
+                      >
+                        Webhooks
+                      </a>{" "}
+                      → New Webhook, then copy the URL.
+                    </>
+                  )}
+                  {kind === "teams" && (
+                    <>
+                      Add an{" "}
+                      <a
+                        href="https://learn.microsoft.com/microsoftteams/platform/webhooks-and-connectors/how-to/add-incoming-webhook"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[var(--color-brand-600)] hover:underline"
+                      >
+                        Incoming Webhook
+                      </a>{" "}
+                      to the channel and paste its URL.
+                    </>
+                  )}
+                </span>
+              </label>
+              {(kind === "slack" || kind === "discord") && (
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block text-sm">
+                    <span className="font-medium">Display name</span>
+                    <span className="text-[var(--muted)]"> (optional)</span>
+                    <input
+                      className={cls}
+                      value={hookUsername}
+                      onChange={(e) => setHookUsername(e.target.value)}
+                      placeholder="Vew APM"
+                    />
+                  </label>
+                  {kind === "slack" && (
+                    <label className="block text-sm">
+                      <span className="font-medium">Icon emoji</span>
+                      <span className="text-[var(--muted)]"> (optional)</span>
+                      <input
+                        className={cls}
+                        value={slackIcon}
+                        onChange={(e) => setSlackIcon(e.target.value)}
+                        placeholder=":rotating_light:"
+                      />
+                    </label>
+                  )}
+                </div>
+              )}
             </>
           )}
 

@@ -27,6 +27,18 @@ const TelegramConfig = z.object({
   protect: z.boolean().optional(),
   template: z.string().optional(),
 });
+const SlackConfig = z.object({
+  webhookUrl: z.string().url(),
+  username: z.string().max(80).optional(),
+  iconEmoji: z.string().max(80).optional(),
+});
+const DiscordConfig = z.object({
+  webhookUrl: z.string().url(),
+  username: z.string().max(80).optional(),
+});
+const TeamsConfig = z.object({
+  webhookUrl: z.string().url(),
+});
 
 const common = {
   name: z.string().min(1),
@@ -37,6 +49,9 @@ const Body = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("webhook"), ...common, config: WebhookConfig }),
   z.object({ kind: z.literal("email"), ...common, config: EmailConfig }),
   z.object({ kind: z.literal("telegram"), ...common, config: TelegramConfig }),
+  z.object({ kind: z.literal("slack"), ...common, config: SlackConfig }),
+  z.object({ kind: z.literal("discord"), ...common, config: DiscordConfig }),
+  z.object({ kind: z.literal("teams"), ...common, config: TeamsConfig }),
 ]);
 
 export async function GET() {

@@ -66,8 +66,12 @@ Full catalogue of what Vew APM does. For a quick overview see the
 
 ## Notifications
 
-- **Global channels** — webhook / email (via Resend) / Telegram. Every enabled channel
-  fires for every monitor (per-monitor silencing is via maintenance / pause).
+- **Global channels** — webhook / email (via Resend) / Telegram / Slack / Discord /
+  Microsoft Teams. Every enabled channel fires for every monitor (per-monitor
+  silencing is via maintenance / pause).
+- **Chat channels** — Slack, Discord, and Teams via incoming webhooks; severity rides
+  on the card color (green resolved · red critical · amber warning). Slack/Discord
+  take an optional display name; Slack also an icon emoji.
 - **Webhook request auth** — None / Basic / Header / Bearer.
 - Per-channel config (incl. Resend API key) — no env var needed.
 - **Secrets encrypted at rest** (AES-256-GCM); never shipped to the client. Masked on

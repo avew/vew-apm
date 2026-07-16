@@ -4,7 +4,7 @@ import { requireUser } from "@/lib/session";
 import { sendTestConfig } from "@/lib/notifier";
 
 const Body = z.object({
-  kind: z.enum(["webhook", "email", "telegram"]),
+  kind: z.enum(["webhook", "email", "telegram", "slack", "discord", "teams"]),
   config: z.record(z.string(), z.unknown()),
 });
 
