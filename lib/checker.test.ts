@@ -700,10 +700,15 @@ describe("prometheus metrics on any monitor (multi-source)", () => {
   const BILLING = "http://billing.test/actuator/prometheus";
   const PPH = "http://pph.test/actuator/prometheus";
 
-  async function addSource(monitorId: number, label: string, url: string) {
+  async function addSource(
+    monitorId: number,
+    label: string,
+    url: string,
+    auth: Partial<typeof schema.metricSources.$inferInsert> = {},
+  ) {
     const [s] = await getDb()
       .insert(schema.metricSources)
-      .values({ monitorId, label, url })
+      .values({ monitorId, label, url, ...auth })
       .returning();
     return s;
   }
@@ -775,5 +780,51 @@ describe("prometheus metrics on any monitor (multi-source)", () => {
 
     expect((await samplesFor(rule.id))[0].value).toBe(3);
     expect((await incidentsFor(m.id)).find((i) => i.kind === "metric")).toBeUndefined();
+  });
+
+  it("scrapes a source with its own header auth (not the monitor's)", async () => {
+    metricsBodies[PPH] = "hikaricp_connections_active 3\n";
+    // Monitor carries a bearer token; the source overrides with a custom header.
+    const m = await createMonitor({
+      type: "actuator",
+      authType: "bearer",
+      authHeaderValue: "monitor-token",
+    });
+    const pph = await addSource(m.id, "pph", PPH, {
+      authType: "header",
+      authHeaderName: "X-Metrics-Token",
+      authHeaderValue: "source-secret",
+    });
+    await addRule(m.id, pph.id, {
+      label: "pph conns",
+      metricName: "hikaricp_connections_active",
+      warnValue: 40,
+    });
+
+    await runCheck(m);
+
+    // The scrape (last non-webhook fetch) used the source's header, not the
+    // monitor's Authorization.
+    expect(lastHeaders["X-Metrics-Token"]).toBe("source-secret");
+    expect(lastHeaders.Authorization).toBeUndefined();
+  });
+
+  it("falls back to the monitor's auth when the source sets none", async () => {
+    metricsBodies[PPH] = "hikaricp_connections_active 3\n";
+    const m = await createMonitor({
+      type: "actuator",
+      authType: "bearer",
+      authHeaderValue: "monitor-token",
+    });
+    const pph = await addSource(m.id, "pph", PPH, { authType: "none" });
+    await addRule(m.id, pph.id, {
+      label: "pph conns",
+      metricName: "hikaricp_connections_active",
+      warnValue: 40,
+    });
+
+    await runCheck(m);
+
+    expect(lastHeaders.Authorization).toBe("Bearer monitor-token");
   });
 });

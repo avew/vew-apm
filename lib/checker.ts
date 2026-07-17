@@ -917,15 +917,29 @@ async function loadEnabledMetricRules(monitorId: number) {
     );
 }
 
+/**
+ * Auth headers for scraping a source: the source's own auth when it sets one
+ * (authType other than none), else inherit the monitor's auth. A scrape target
+ * often differs from the monitor URL (e.g. a per-service /actuator/prometheus
+ * behind a shared token) so it needs its own credentials.
+ */
+function sourceAuthHeaders(
+  monitor: Monitor,
+  source: typeof schema.metricSources.$inferSelect,
+): Record<string, string> {
+  const useSource = source.authType != null && source.authType !== "none";
+  return buildAuthHeaders(useSource ? source : monitor);
+}
+
 /** Scrape a Prometheus text endpoint. Null on any failure — rules just don't fire. */
 async function scrapeMetrics(
   monitor: Monitor,
-  url: string,
+  source: typeof schema.metricSources.$inferSelect,
 ): Promise<PromSample[] | null> {
   try {
-    const res = await fetch(url, {
+    const res = await fetch(source.url, {
       method: "GET",
-      headers: { accept: "text/plain", ...buildAuthHeaders(monitor) },
+      headers: { accept: "text/plain", ...sourceAuthHeaders(monitor, source) },
       signal: AbortSignal.timeout(monitor.timeoutMs),
       cache: "no-store",
     });
@@ -944,18 +958,15 @@ async function scrapeMetrics(
  */
 function computeMetricReadings(
   rules: (typeof schema.metricRules.$inferSelect)[],
-  sources: (typeof schema.metricSources.$inferSelect)[],
-  samplesByUrl: Map<string, PromSample[] | null>,
+  samplesBySourceId: Map<number, PromSample[] | null>,
 ): { inputs: MetricInput[]; readings: { ruleId: number; value: number }[] } {
-  const urlBySourceId = new Map(sources.map((s) => [s.id, s.url]));
   const inputs: MetricInput[] = [];
   const readings: { ruleId: number; value: number }[] = [];
   for (const r of rules) {
     if (r.sourceId == null) continue;
-    const url = urlBySourceId.get(r.sourceId);
-    if (!url) continue;
+    if (!samplesBySourceId.has(r.sourceId)) continue;
     const value = selectSample(
-      samplesByUrl.get(url) ?? [],
+      samplesBySourceId.get(r.sourceId) ?? [],
       r.metricName,
       (r.labelMatchers as Record<string, string> | null) ?? null,
     );
@@ -986,16 +997,22 @@ export async function runCheck(monitor: Monitor): Promise<void> {
     loadMetricSources(monitor.id),
     loadEnabledMetricRules(monitor.id),
   ]);
-  const samplesByUrl = new Map<string, PromSample[] | null>();
-  if (rules.length > 0) {
-    for (const url of new Set(sources.map((s) => s.url))) {
-      samplesByUrl.set(url, await scrapeMetrics(monitor, url));
-    }
+  // Scrape once per source referenced by an enabled rule. Keyed by source (not
+  // URL): each source can carry its own auth, so two sources sharing a URL but
+  // differing in credentials must be scraped separately.
+  const samplesBySourceId = new Map<number, PromSample[] | null>();
+  const sourceById = new Map(sources.map((s) => [s.id, s]));
+  const neededSourceIds = new Set(
+    rules
+      .map((r) => r.sourceId)
+      .filter((id): id is number => id != null && sourceById.has(id)),
+  );
+  for (const sid of neededSourceIds) {
+    samplesBySourceId.set(sid, await scrapeMetrics(monitor, sourceById.get(sid)!));
   }
   const { inputs: metricInputs, readings } = computeMetricReadings(
     rules,
-    sources,
-    samplesByUrl,
+    samplesBySourceId,
   );
   persistCheck(monitor, result, muted, readings);
 
