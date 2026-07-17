@@ -14,7 +14,20 @@ export type AlertKind =
 
 export type MetricOp = "gt" | "gte" | "lt" | "lte";
 
-/** A scraped Prometheus metric reading + its per-rule warn/crit thresholds. */
+/**
+ * How a metric rule reads its series before comparing to the threshold:
+ * `instant` = current value; `sustained` = breached across the whole window;
+ * `delta` = change over the window; `rate` = per-second change over the window.
+ * Trend math lives in `metric-trend.ts`; this type is shared so the rule engine
+ * can label the reason correctly.
+ */
+export type TrendMode = "instant" | "sustained" | "delta" | "rate";
+
+/**
+ * A metric reading fed to the rule engine + its per-rule warn/crit thresholds.
+ * For trend rules the checker sets `value` to the already-derived scalar and
+ * passes `mode`/`windowSeconds` for the reason string only.
+ */
 export interface MetricInput {
   key: string; // dedup + incident scope (the rule's friendly label)
   label: string;
@@ -22,6 +35,32 @@ export interface MetricInput {
   operator: MetricOp;
   warnValue: number | null;
   critValue: number | null;
+  mode?: TrendMode; // defaults to "instant"
+  windowSeconds?: number | null;
+}
+
+/** "5m", "90s", "2h" — compact window label for reason strings. */
+function fmtWindow(seconds: number | null | undefined): string {
+  if (!seconds || seconds <= 0) return "";
+  if (seconds % 3600 === 0) return `${seconds / 3600}h`;
+  if (seconds % 60 === 0) return `${seconds / 60}m`;
+  return `${seconds}s`;
+}
+
+/** Human reason for a breached metric rule, worded for its trend mode. */
+function metricReason(m: MetricInput, threshold: number): string {
+  const sym = OP_SYMBOL[m.operator];
+  const win = fmtWindow(m.windowSeconds);
+  switch (m.mode) {
+    case "sustained":
+      return `${m.label} ${sym} ${threshold} sustained ${win}`;
+    case "delta":
+      return `${m.label} changed ${m.value} over ${win} (${sym} ${threshold})`;
+    case "rate":
+      return `${m.label} rate ${m.value}/s ${sym} ${threshold} over ${win}`;
+    default:
+      return `${m.label} = ${m.value} ${sym} ${threshold}`;
+  }
 }
 
 const OP_SYMBOL: Record<MetricOp, string> = { gt: ">", gte: "≥", lt: "<", lte: "≤" };
@@ -225,7 +264,6 @@ export function evaluateRules(ctx: RuleContext): DesiredAlert[] {
 
   // 8. Prometheus metric thresholds (per-rule; crit before warn, one per rule).
   for (const m of ctx.metrics ?? []) {
-    const sym = OP_SYMBOL[m.operator];
     if (m.critValue !== null && breaches(m.value, m.operator, m.critValue)) {
       out.push({
         kind: "metric",
@@ -233,7 +271,7 @@ export function evaluateRules(ctx: RuleContext): DesiredAlert[] {
         severity: "critical",
         metricValue: m.value,
         threshold: m.critValue,
-        reason: `${m.label} = ${m.value} ${sym} ${m.critValue}`,
+        reason: metricReason(m, m.critValue),
       });
     } else if (m.warnValue !== null && breaches(m.value, m.operator, m.warnValue)) {
       out.push({
@@ -242,7 +280,7 @@ export function evaluateRules(ctx: RuleContext): DesiredAlert[] {
         severity: "warning",
         metricValue: m.value,
         threshold: m.warnValue,
-        reason: `${m.label} = ${m.value} ${sym} ${m.warnValue}`,
+        reason: metricReason(m, m.warnValue),
       });
     }
   }

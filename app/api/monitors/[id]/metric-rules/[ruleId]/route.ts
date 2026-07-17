@@ -10,6 +10,8 @@ const PatchBody = z.object({
   metricName: z.string().min(1).max(200).optional(),
   labelMatchers: z.record(z.string(), z.string()).nullish(),
   operator: z.enum(["gt", "gte", "lt", "lte"]).optional(),
+  mode: z.enum(["instant", "sustained", "delta", "rate"]).optional(),
+  windowSeconds: z.number().int().positive().max(86_400).nullish(),
   warnValue: z.number().nullish(),
   critValue: z.number().nullish(),
   enabled: z.boolean().optional(),
@@ -44,9 +46,17 @@ export async function PATCH(
   if (d.metricName !== undefined) updates.metricName = d.metricName;
   if (d.labelMatchers !== undefined) updates.labelMatchers = d.labelMatchers ?? null;
   if (d.operator !== undefined) updates.operator = d.operator;
-  if (d.warnValue !== undefined) updates.warnValue = d.warnValue;
-  if (d.critValue !== undefined) updates.critValue = d.critValue;
-  if (d.enabled !== undefined) updates.enabled = d.enabled;
+  if (d.mode !== undefined) updates.mode = d.mode;
+  if (d.windowSeconds !== undefined) updates.windowSeconds = d.windowSeconds ?? null;
+  // Switching to instant clears the window; a trend mode with an explicit null
+  // window is rejected (a window already on the row is left untouched).
+  if (d.mode === "instant") updates.windowSeconds = null;
+  if (d.mode && d.mode !== "instant" && d.windowSeconds === null) {
+    return NextResponse.json(
+      { error: "windowSeconds is required for a trend mode" },
+      { status: 400 },
+    );
+  }
 
   const db = getDb();
   await db

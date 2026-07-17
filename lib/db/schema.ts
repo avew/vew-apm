@@ -189,6 +189,12 @@ export const metricRules = sqliteTable(
     metricName: text("metric_name").notNull(), // e.g. jvm_memory_used_bytes
     labelMatchers: text("label_matchers", { mode: "json" }), // Record<string,string> | null
     operator: text("operator").notNull().default("gt"), // gt | gte | lt | lte
+    // Trend evaluation over a trailing window. "instant" (default) compares the
+    // current value — identical to pre-trend behavior. "sustained" fires only if
+    // every sample in the window breaches; "delta"/"rate" compare the change /
+    // per-second change over the window. windowSeconds is required for non-instant.
+    mode: text("mode").notNull().default("instant"), // instant | sustained | delta | rate
+    windowSeconds: integer("window_seconds"), // null for instant
     warnValue: real("warn_value"),
     critValue: real("crit_value"),
     enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
