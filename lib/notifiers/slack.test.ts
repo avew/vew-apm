@@ -1,6 +1,37 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { sendSlack, type SlackConfig } from "./slack";
+import { createHmac } from "node:crypto";
+import { sendSlack, verifySlackSignature, type SlackConfig } from "./slack";
 import { NotifyError } from "../retry";
+
+describe("verifySlackSignature", () => {
+  const secret = "shhh";
+  const now = 1_700_000_000;
+  const body = "payload=%7B%22ok%22%3Atrue%7D";
+  const sign = (ts: number, b: string) =>
+    "v0=" + createHmac("sha256", secret).update(`v0:${ts}:${b}`).digest("hex");
+
+  it("accepts a correctly signed, fresh request", () => {
+    expect(verifySlackSignature(secret, String(now), body, sign(now, body), now)).toBe(true);
+  });
+
+  it("rejects a wrong signature", () => {
+    expect(verifySlackSignature(secret, String(now), body, "v0=deadbeef", now)).toBe(false);
+  });
+
+  it("rejects a tampered body", () => {
+    const sig = sign(now, body);
+    expect(verifySlackSignature(secret, String(now), body + "x", sig, now)).toBe(false);
+  });
+
+  it("rejects a stale timestamp (> 5 min)", () => {
+    const ts = now - 400;
+    expect(verifySlackSignature(secret, String(ts), body, sign(ts, body), now)).toBe(false);
+  });
+
+  it("rejects a non-numeric timestamp", () => {
+    expect(verifySlackSignature(secret, "nope", body, sign(now, body), now)).toBe(false);
+  });
+});
 
 describe("sendSlack", () => {
   afterEach(() => vi.unstubAllGlobals());

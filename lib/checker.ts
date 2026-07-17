@@ -6,7 +6,7 @@ import { evaluateHttp, evaluateJson } from "./check-eval";
 import { parsePromText, selectSample, type PromSample } from "./prom-parse";
 import { buildAuthHeaders } from "./auth-header";
 import { isMonitorMuted } from "./maintenance";
-import { dispatch, dispatchToChannel } from "./notifier";
+import { dispatch, dispatchToChannel, dispatchGrouped, type DownEvent } from "./notifier";
 import { dueEscalationSteps, type EscStep } from "./escalation";
 import { currentOnCallIndex } from "./oncall";
 import { getEffectiveThresholds } from "./alerts";
@@ -570,14 +570,22 @@ async function syncServiceRegistry(
  * Opens incidents that should exist, resolves ones that no longer apply,
  * and refreshes metric/reason on ones that persist.
  */
-/** Steps of the single active escalation policy (P4), or [] if none is active. */
-async function loadActiveEscalationSteps(): Promise<EscStep[]> {
+/**
+ * Escalation steps that apply to a monitor: its own policy override
+ * (`escalationPolicyId`, A1) if set, otherwise the single globally-active
+ * policy (P4). Empty when neither resolves.
+ */
+async function loadEscalationStepsFor(monitor: Monitor): Promise<EscStep[]> {
   const db = getDb();
-  const [policy] = await db
-    .select({ id: schema.escalationPolicies.id })
-    .from(schema.escalationPolicies)
-    .where(eq(schema.escalationPolicies.active, true));
-  if (!policy) return [];
+  let policyId = monitor.escalationPolicyId ?? null;
+  if (policyId == null) {
+    const [active] = await db
+      .select({ id: schema.escalationPolicies.id })
+      .from(schema.escalationPolicies)
+      .where(eq(schema.escalationPolicies.active, true));
+    policyId = active?.id ?? null;
+  }
+  if (policyId == null) return [];
   const steps = await db
     .select({
       afterMinutes: schema.escalationSteps.afterMinutes,
@@ -585,7 +593,7 @@ async function loadActiveEscalationSteps(): Promise<EscStep[]> {
       scheduleId: schema.escalationSteps.scheduleId,
     })
     .from(schema.escalationSteps)
-    .where(eq(schema.escalationSteps.policyId, policy.id));
+    .where(eq(schema.escalationSteps.policyId, policyId));
   return steps;
 }
 
@@ -658,7 +666,7 @@ async function reconcileIncidents(
 ): Promise<void> {
   const db = getDb();
   const thresholds = await getEffectiveThresholds(monitor);
-  const escalationSteps = await loadActiveEscalationSteps();
+  const escalationSteps = await loadEscalationStepsFor(monitor);
   // Dependency suppression (P6): if this monitor's parent is currently down
   // (has an open availability incident), suppress this monitor's incidents so a
   // downed dependency does not fan out into an alert storm. Transitive by
@@ -726,7 +734,10 @@ async function reconcileIncidents(
     ]),
   );
 
-  // Open new alerts.
+  // Open new alerts. Collect this tick's fresh, non-suppressed opens so that if
+  // several trip at once on one monitor we send a single grouped notification
+  // (A2) instead of a burst of one-per-incident alerts.
+  const freshOpens: DownEvent[] = [];
   for (const [key, a] of desired) {
     if (open.has(key)) continue;
     const [inserted] = await db
@@ -747,7 +758,7 @@ async function reconcileIncidents(
       })
       .returning({ id: schema.incidents.id });
     if (!suppressed) {
-      await dispatch({
+      freshOpens.push({
         kind: "down",
         monitor,
         incidentId: inserted.id,
@@ -760,6 +771,11 @@ async function reconcileIncidents(
         threshold: a.threshold,
       });
     }
+  }
+  if (freshOpens.length === 1) {
+    await dispatch(freshOpens[0]);
+  } else if (freshOpens.length > 1) {
+    await dispatchGrouped(monitor, freshOpens);
   }
 
   // Resolve or refresh existing.

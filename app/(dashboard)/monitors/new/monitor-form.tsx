@@ -4,12 +4,15 @@ import { useRouter } from "next/navigation";
 
 export function MonitorForm({
   monitors = [],
+  policies = [],
 }: {
   monitors?: { id: number; name: string }[];
+  policies?: { id: number; name: string }[];
 }) {
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [dependsOn, setDependsOn] = useState("");
+  const [escalationPolicyId, setEscalationPolicyId] = useState("");
   const [intervalSeconds, setInterval] = useState(60);
   const [timeoutMs, setTimeoutMs] = useState(10000);
   const [authType, setAuthType] = useState<"none" | "basic" | "header" | "bearer">("none");
@@ -87,6 +90,9 @@ export function MonitorForm({
               authType !== "none" ? authHeaderValue || undefined : undefined,
             group: group.trim() || undefined,
             dependsOn: dependsOn ? Number(dependsOn) : undefined,
+            escalationPolicyId: escalationPolicyId
+              ? Number(escalationPolicyId)
+              : undefined,
             type,
             expectStatus: type === "http" ? expectStatus.trim() || undefined : undefined,
             keyword:
@@ -244,6 +250,25 @@ export function MonitorForm({
           </select>
           <p className="text-xs text-[var(--muted)] mt-1">
             While the parent is down, this monitor&apos;s alerts are suppressed.
+          </p>
+        </Field>
+      )}
+      {policies.length > 0 && (
+        <Field label="Escalation policy (optional)">
+          <select
+            className="field-input"
+            value={escalationPolicyId}
+            onChange={(e) => setEscalationPolicyId(e.target.value)}
+          >
+            <option value="">Use the globally-active policy</option>
+            {policies.map((p) => (
+              <option key={p.id} value={String(p.id)}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-[var(--muted)] mt-1">
+            Overrides which escalation ladder this monitor uses.
           </p>
         </Field>
       )}

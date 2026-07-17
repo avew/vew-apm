@@ -88,6 +88,13 @@ Full catalogue of what Vew APM does. For a quick overview see the
   clicking it (Acknowledge / Snooze 1h / Snooze 4h) stops reminder notifications
   until the incident recovers or the snooze ends. Escalation to critical clears an
   ack and re-alerts. Requires `APP_BASE_URL` for the link to be included.
+  **Interactive buttons**: with `SLACK_SIGNING_SECRET` / `TELEGRAM_WEBHOOK_SECRET`
+  set, Slack and Telegram alerts also carry an in-message "Acknowledge" button
+  (Slack interactivity URL `/api/slack/interactions`; Telegram webhook
+  `/api/telegram/webhook`).
+- **Grouped alerts** — when several incidents open on one monitor at once, chat /
+  webhook / email get a single digest instead of a burst (PagerDuty/Opsgenie still
+  get one alert per incident).
 - **Escalation policies** — an ordered, time-delayed ladder of steps; each step
   pages a channel (or the current on-call responder) N minutes after a critical
   incident opens if it is still unacknowledged. One policy is active at a time;

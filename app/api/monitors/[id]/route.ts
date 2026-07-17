@@ -33,6 +33,7 @@ const PatchBody = z.object({
   componentGraceSeconds: z.number().int().min(0).max(86400).nullable().optional(),
   renotifyMinutes: z.number().int().min(0).max(10080).nullable().optional(),
   dependsOn: z.number().int().positive().nullable().optional(),
+  escalationPolicyId: z.number().int().positive().nullable().optional(),
 });
 
 async function getId(ctx: { params: Promise<{ id: string }> }) {

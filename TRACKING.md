@@ -5,16 +5,21 @@ Status for the ops-notification roadmap. Plan detail lives in
 
 **Legend:** 🚀 shipped · ✅ done · 🚧 in progress · ⬜ not started · ⏸️ blocked
 
-## 🚀 SHIPPED — all 7 phases merged to `main`
+## 🚀 SHIPPED — all 7 phases + polish (A1–A3)
 
-- **PR [#51](https://github.com/avew/vew-apm/pull/51)** merged 2026-07-16 (merge commit `1dd5a6f`).
-- CI green on merge: Lint · Typecheck · Test · Build ✅ · E2E (Playwright) ✅ · Docker build ✅ · Dependency audit ✅.
-- 211 tests green (54 new for this track) · typecheck + build clean.
-- Deferred refinements (interactive Slack/Telegram ack buttons, per-monitor escalation
-  policy, schedule overrides, cross-monitor alert grouping, edit-dependency UI) are
-  noted per phase below and are non-blocking.
+- **PR [#51](https://github.com/avew/vew-apm/pull/51)** (P1–P7) merged 2026-07-16 (merge commit `1dd5a6f`). CI green.
+- **Polish follow-up (A1–A3)** on branch `feat/notify-polish`:
+  - **A1** — per-monitor escalation policy override (`monitors.escalationPolicyId`).
+  - **A2** — group simultaneous opens on one monitor into a single digest (chat/webhook/email; PD/Opsgenie stay per-incident).
+  - **A3** — interactive Slack/Telegram "Acknowledge" buttons (`/api/slack/interactions`, `/api/telegram/webhook`; provider-signature auth; opt-in via `SLACK_SIGNING_SECRET` / `TELEGRAM_WEBHOOK_SECRET`).
+- 218 tests green · typecheck + lint + build clean.
 
-_Last updated: 2026-07-16 · merged from `feat/notify-native-channels` (branch deleted)_
+**Still deferred (non-blocking):** on-call schedule manual overrides · true cross-service
+alert grouping (P6 dependency suppression covers the correlated case) · edit an existing
+monitor's parent/policy via the UI (API + clone already support it) · `monitors.dependsOn`
+ON-DELETE-SET-NULL correction (migration 0016 quirk — needs a table rebuild).
+
+_Last updated: 2026-07-16 · A1–A3 on `feat/notify-polish`_
 
 ## Phase status
 

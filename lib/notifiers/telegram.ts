@@ -14,6 +14,7 @@ export interface TelegramConfig {
 export async function sendTelegram(
   config: TelegramConfig,
   text: string,
+  opts: { ackIncidentId?: number } = {},
 ): Promise<void> {
   const base = (config.serverUrl?.trim() || "https://api.telegram.org").replace(
     /\/+$/,
@@ -33,6 +34,20 @@ export async function sendTelegram(
         protect_content: config.protect ?? false,
         ...(config.messageThreadId
           ? { message_thread_id: Number(config.messageThreadId) }
+          : {}),
+        ...(opts.ackIncidentId != null
+          ? {
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    {
+                      text: "Acknowledge",
+                      callback_data: `ack:${opts.ackIncidentId}`,
+                    },
+                  ],
+                ],
+              },
+            }
           : {}),
       }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
