@@ -250,4 +250,28 @@ describe("evaluateRules — metric thresholds", () => {
     ).find((x) => x.kind === "metric");
     expect(a).toBeUndefined();
   });
+
+  it("words the reason for a sustained trend rule", () => {
+    const a = evaluateRules(
+      ctx({
+        metrics: [
+          { key: "cpu", label: "Process CPU", value: 0.9, operator: "gt", warnValue: 0.85, critValue: 0.95, mode: "sustained", windowSeconds: 600 },
+        ],
+      }),
+    ).find((x) => x.kind === "metric");
+    expect(a?.severity).toBe("warning");
+    expect(a?.reason).toBe("Process CPU > 0.85 sustained 10m");
+  });
+
+  it("words the reason for a delta trend rule", () => {
+    const a = evaluateRules(
+      ctx({
+        metrics: [
+          { key: "err", label: "Errors", value: 143, operator: "gt", warnValue: 10, critValue: 50, mode: "delta", windowSeconds: 300 },
+        ],
+      }),
+    ).find((x) => x.kind === "metric");
+    expect(a?.severity).toBe("critical");
+    expect(a?.reason).toBe("Errors changed 143 over 5m (> 50)");
+  });
 });

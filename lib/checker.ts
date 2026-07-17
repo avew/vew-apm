@@ -1,6 +1,6 @@
 import tls from "node:tls";
 import { getDb, schema } from "@/lib/db/client";
-import { and, asc, eq, lte, desc, inArray } from "drizzle-orm";
+import { and, asc, eq, gte, lte, desc, inArray } from "drizzle-orm";
 import { parseHealth, type ParsedHealth } from "./parser";
 import { evaluateHttp, evaluateJson } from "./check-eval";
 import { parsePromText, selectSample, type PromSample } from "./prom-parse";
@@ -17,7 +17,9 @@ import {
   type AlertKind,
   type MetricInput,
   type MetricOp,
+  type TrendMode,
 } from "./rules";
+import { computeTrend, type TrendSample } from "./metric-trend";
 import type { Monitor } from "@/lib/db/schema";
 
 interface FetchResult {
@@ -952,13 +954,59 @@ async function scrapeMetrics(
 }
 
 /**
+ * Prior stored readings per rule since `sinceMs`, ascending by time, for trend
+ * evaluation. Joins metric_samples to their check for the timestamp. Empty for
+ * instant-only monitors (never called).
+ */
+async function loadMetricHistory(
+  ruleIds: number[],
+  sinceMs: number,
+): Promise<Map<number, TrendSample[]>> {
+  const map = new Map<number, TrendSample[]>();
+  if (ruleIds.length === 0) return map;
+  const rows = await getDb()
+    .select({
+      ruleId: schema.metricSamples.ruleId,
+      value: schema.metricSamples.value,
+      at: schema.checks.checkedAt,
+    })
+    .from(schema.metricSamples)
+    .innerJoin(schema.checks, eq(schema.metricSamples.checkId, schema.checks.id))
+    .where(
+      and(
+        inArray(schema.metricSamples.ruleId, ruleIds),
+        gte(schema.checks.checkedAt, new Date(sinceMs)),
+      ),
+    )
+    .orderBy(asc(schema.checks.checkedAt));
+  for (const row of rows) {
+    const at = row.at instanceof Date ? row.at.getTime() : new Date(row.at).getTime();
+    const arr = map.get(row.ruleId);
+    if (arr) arr.push({ at, value: row.value });
+    else map.set(row.ruleId, [{ at, value: row.value }]);
+  }
+  return map;
+}
+
+/** Round a derived trend scalar so reasons/charts stay readable. */
+function roundTrend(v: number): number {
+  return Math.round(v * 1000) / 1000;
+}
+
+/**
  * Pure: match each enabled rule against its source's scraped samples. Returns the
- * per-rule thresholds (for the rule engine) and the readings to store (rules with a
- * present value). Rules without a source, or whose metric is absent, are skipped.
+ * per-rule inputs (for the rule engine) and the readings to store. The stored
+ * reading is always the *raw* instantaneous value (charts + trend history);
+ * trend-mode rules additionally reduce raw history + the current value to a
+ * derived scalar via `computeTrend`, and are skipped as inputs (no fire) until
+ * enough history exists. Rules without a source, or whose metric is absent, are
+ * skipped entirely.
  */
 function computeMetricReadings(
   rules: (typeof schema.metricRules.$inferSelect)[],
   samplesBySourceId: Map<number, PromSample[] | null>,
+  historyByRule: Map<number, TrendSample[]>,
+  nowMs: number,
 ): { inputs: MetricInput[]; readings: { ruleId: number; value: number }[] } {
   const inputs: MetricInput[] = [];
   const readings: { ruleId: number; value: number }[] = [];
@@ -971,14 +1019,38 @@ function computeMetricReadings(
       (r.labelMatchers as Record<string, string> | null) ?? null,
     );
     if (value === null) continue;
+    // Always persist the raw reading — it feeds charts and future trend windows.
     readings.push({ ruleId: r.id, value });
+
+    const mode = (r.mode ?? "instant") as TrendMode;
+    const operator = r.operator as MetricOp;
+    if (mode === "instant") {
+      inputs.push({
+        key: r.label,
+        label: r.label,
+        value,
+        operator,
+        warnValue: r.warnValue,
+        critValue: r.critValue,
+        mode,
+      });
+      continue;
+    }
+
+    // Trend: current reading is the last point of the series.
+    const windowSeconds = r.windowSeconds ?? 0;
+    const series = [...(historyByRule.get(r.id) ?? []), { at: nowMs, value }];
+    const trend = computeTrend(series, mode, windowSeconds * 1000, operator);
+    if (trend.insufficient) continue; // not enough history yet → no fire, no flap
     inputs.push({
       key: r.label,
       label: r.label,
-      value,
-      operator: r.operator as MetricOp,
+      value: roundTrend(trend.value),
+      operator,
       warnValue: r.warnValue,
       critValue: r.critValue,
+      mode,
+      windowSeconds,
     });
   }
   return { inputs, readings };
@@ -1010,9 +1082,26 @@ export async function runCheck(monitor: Monitor): Promise<void> {
   for (const sid of neededSourceIds) {
     samplesBySourceId.set(sid, await scrapeMetrics(monitor, sourceById.get(sid)!));
   }
+  // Trend rules need prior readings; load history back to the widest window in use.
+  const trendRules = rules.filter(
+    (r) => (r.mode ?? "instant") !== "instant" && (r.windowSeconds ?? 0) > 0,
+  );
+  const maxWindowMs = trendRules.reduce(
+    (m, r) => Math.max(m, (r.windowSeconds ?? 0) * 1000),
+    0,
+  );
+  const historyByRule =
+    maxWindowMs > 0
+      ? await loadMetricHistory(
+          trendRules.map((r) => r.id),
+          now.getTime() - maxWindowMs,
+        )
+      : new Map<number, TrendSample[]>();
   const { inputs: metricInputs, readings } = computeMetricReadings(
     rules,
     samplesBySourceId,
+    historyByRule,
+    now.getTime(),
   );
   persistCheck(monitor, result, muted, readings);
 

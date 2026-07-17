@@ -4,16 +4,31 @@ import { getDb, schema } from "@/lib/db/client";
 import { requireUser } from "@/lib/session";
 import { and, eq } from "drizzle-orm";
 
-const CreateBody = z.object({
-  sourceId: z.number().int(),
-  label: z.string().min(1).max(120),
-  metricName: z.string().min(1).max(200),
-  labelMatchers: z.record(z.string(), z.string()).nullish(),
-  operator: z.enum(["gt", "gte", "lt", "lte"]).default("gt"),
-  warnValue: z.number().nullish(),
-  critValue: z.number().nullish(),
-  enabled: z.boolean().default(true),
-});
+// windowSeconds is required (and positive) for any non-instant trend mode, and
+// forced null for instant so the two never disagree.
+const WINDOW_MAX = 86_400; // 24h — a trailing alert window beyond this is nonsense
+const CreateBody = z
+  .object({
+    sourceId: z.number().int(),
+    label: z.string().min(1).max(120),
+    metricName: z.string().min(1).max(200),
+    labelMatchers: z.record(z.string(), z.string()).nullish(),
+    operator: z.enum(["gt", "gte", "lt", "lte"]).default("gt"),
+    mode: z.enum(["instant", "sustained", "delta", "rate"]).default("instant"),
+    windowSeconds: z.number().int().positive().max(WINDOW_MAX).nullish(),
+    warnValue: z.number().nullish(),
+    critValue: z.number().nullish(),
+    enabled: z.boolean().default(true),
+  })
+  .superRefine((d, ctx) => {
+    if (d.mode !== "instant" && !d.windowSeconds) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["windowSeconds"],
+        message: "windowSeconds is required for a trend mode",
+      });
+    }
+  });
 
 async function monitorId(ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
@@ -67,6 +82,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       metricName: d.metricName,
       labelMatchers: (d.labelMatchers ?? null) as object | null,
       operator: d.operator,
+      mode: d.mode,
+      windowSeconds: d.mode === "instant" ? null : (d.windowSeconds ?? null),
       warnValue: d.warnValue ?? null,
       critValue: d.critValue ?? null,
       enabled: d.enabled,

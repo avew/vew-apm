@@ -409,6 +409,8 @@ export default async function MonitorDetail({
             metricName: r.metricName,
             labelMatchers: (r.labelMatchers as Record<string, string> | null) ?? null,
             operator: r.operator as "gt" | "gte" | "lt" | "lte",
+            mode: (r.mode as "instant" | "sustained" | "delta" | "rate" | null) ?? "instant",
+            windowSeconds: r.windowSeconds,
             warnValue: r.warnValue,
             critValue: r.critValue,
             enabled: r.enabled,
