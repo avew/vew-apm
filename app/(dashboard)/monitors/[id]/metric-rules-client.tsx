@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, Pencil, Server, KeyRound } from "lucide-react";
+import { Plus, Trash2, Pencil, Server, KeyRound, Plug, CheckCircle2, XCircle } from "lucide-react";
 import { MetricChart } from "./metric-chart";
 
 type Op = "gt" | "gte" | "lt" | "lte";
@@ -101,6 +101,14 @@ export function MetricRulesClient({
   // --- sources ---
   const [srcForm, setSrcForm] = useState<SrcForm | null>(null);
   const [sample, setSample] = useState<{ sourceId: number; text: string } | null>(null);
+  // Result of the in-form "Test" button (verify the URL + auth before saving).
+  const [srcTest, setSrcTest] = useState<{
+    loading: boolean;
+    ok?: boolean;
+    status?: number;
+    error?: string;
+    preview?: string;
+  } | null>(null);
 
   const saveSource = async () => {
     if (!srcForm || !srcForm.label.trim() || !srcForm.url.trim()) return;
@@ -140,7 +148,8 @@ export function MetricRulesClient({
     const j = await res.json().catch(() => ({}));
     setSample({ sourceId: s.id, text: typeof j.body === "string" ? j.body : JSON.stringify(j, null, 2) });
   };
-  const editSource = (s: Source) =>
+  const editSource = (s: Source) => {
+    setSrcTest(null);
     setSrcForm({
       id: s.id,
       label: s.label,
@@ -151,6 +160,56 @@ export function MetricRulesClient({
       authHeaderValue: "",
       hasAuthSecret: s.hasAuthSecret,
     });
+  };
+
+  // Hit the endpoint with the values currently in the form — before saving — so
+  // the operator can confirm the URL + credentials actually reach it.
+  const testEndpoint = async () => {
+    if (!srcForm || !srcForm.url.trim()) return;
+    setSrcTest({ loading: true });
+    // Editing an existing source whose stored secret is left blank (= keep):
+    // test via the saved source so the stored secret is used server-side.
+    const keepStored =
+      srcForm.id !== "new" &&
+      srcForm.hasAuthSecret &&
+      srcForm.authType !== "none" &&
+      srcForm.authHeaderValue === "";
+    try {
+      const res = keepStored
+        ? await fetch(`${base}/metric-sources/${srcForm.id}/sample`, { method: "POST" })
+        : await fetch("/api/monitors/sample", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              url: srcForm.url.trim(),
+              method: "GET",
+              authType: srcForm.authType,
+              authUsername:
+                srcForm.authType === "basic" ? srcForm.authUsername.trim() : undefined,
+              authHeaderName:
+                srcForm.authType === "header" ? srcForm.authHeaderName.trim() : undefined,
+              authHeaderValue:
+                srcForm.authType === "none" ? undefined : srcForm.authHeaderValue,
+            }),
+          });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        // Our own route rejected the request (e.g. invalid URL).
+        setSrcTest({ loading: false, error: j.error ?? `request rejected (HTTP ${res.status})` });
+      } else if (j.fetchError) {
+        setSrcTest({ loading: false, error: j.fetchError });
+      } else {
+        setSrcTest({
+          loading: false,
+          ok: !!j.ok,
+          status: j.status,
+          preview: typeof j.body === "string" ? j.body.slice(0, 600) : undefined,
+        });
+      }
+    } catch (e) {
+      setSrcTest({ loading: false, error: (e as Error).message });
+    }
+  };
 
   // --- rules ---
   const [ruleForm, setRuleForm] = useState<
@@ -231,7 +290,10 @@ export function MetricRulesClient({
           <button
             type="button"
             className="btn btn-ghost text-sm"
-            onClick={() => setSrcForm({ ...EMPTY_SRC, id: "new" })}
+            onClick={() => {
+              setSrcTest(null);
+              setSrcForm({ ...EMPTY_SRC, id: "new" });
+            }}
           >
             <Plus className="w-4 h-4" /> Add endpoint
           </button>
@@ -298,10 +360,41 @@ export function MetricRulesClient({
               )}
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
               <button type="button" onClick={saveSource} className="btn btn-primary">Save</button>
-              <button type="button" onClick={() => setSrcForm(null)} className="btn btn-ghost">Cancel</button>
+              <button
+                type="button"
+                onClick={testEndpoint}
+                disabled={!srcForm.url.trim() || srcTest?.loading}
+                className="btn btn-ghost"
+              >
+                <Plug className="w-4 h-4" /> {srcTest?.loading ? "Testing…" : "Test"}
+              </button>
+              <button type="button" onClick={() => { setSrcForm(null); setSrcTest(null); }} className="btn btn-ghost">Cancel</button>
             </div>
+
+            {srcTest && !srcTest.loading && (
+              <div className="space-y-2">
+                {srcTest.error ? (
+                  <p className="text-sm text-red-600 flex items-center gap-1.5">
+                    <XCircle className="w-4 h-4 shrink-0" /> Could not reach endpoint: {srcTest.error}
+                  </p>
+                ) : srcTest.ok ? (
+                  <p className="text-sm text-emerald-600 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" /> Reached — HTTP {srcTest.status}
+                  </p>
+                ) : (
+                  <p className="text-sm text-amber-600 flex items-center gap-1.5">
+                    <XCircle className="w-4 h-4 shrink-0" /> HTTP {srcTest.status} — reachable, but the request was rejected (check auth).
+                  </p>
+                )}
+                {srcTest.preview && (
+                  <pre className="max-h-40 overflow-auto rounded-lg border border-[var(--border)] bg-black/[0.03] dark:bg-white/[0.04] p-2.5 text-xs">
+                    {srcTest.preview}
+                  </pre>
+                )}
+              </div>
+            )}
           </div>
         )}
 
