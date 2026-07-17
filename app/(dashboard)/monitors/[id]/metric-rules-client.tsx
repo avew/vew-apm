@@ -1,17 +1,44 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, Pencil, Server } from "lucide-react";
+import { Plus, Trash2, Pencil, Server, KeyRound, Plug, CheckCircle2, XCircle } from "lucide-react";
 import { MetricChart } from "./metric-chart";
 
 type Op = "gt" | "gte" | "lt" | "lte";
 const OP_SYMBOL: Record<Op, string> = { gt: ">", gte: "≥", lt: "<", lte: "≤" };
 
+type AuthType = "none" | "basic" | "header" | "bearer";
+
 export interface Source {
   id: number;
   label: string;
   url: string;
+  authType: AuthType | null;
+  authUsername: string | null;
+  authHeaderName: string | null;
+  hasAuthSecret: boolean;
 }
+
+interface SrcForm {
+  id: number | "new";
+  label: string;
+  url: string;
+  authType: AuthType;
+  authUsername: string;
+  authHeaderName: string;
+  authHeaderValue: string; // blank on edit = keep the stored secret
+  hasAuthSecret: boolean;
+}
+
+const EMPTY_SRC: Omit<SrcForm, "id"> = {
+  label: "",
+  url: "",
+  authType: "none",
+  authUsername: "",
+  authHeaderName: "",
+  authHeaderValue: "",
+  hasAuthSecret: false,
+};
 export interface Rule {
   id: number;
   sourceId: number | null;
@@ -72,16 +99,37 @@ export function MetricRulesClient({
   const base = `/api/monitors/${monitorId}`;
 
   // --- sources ---
-  const [srcForm, setSrcForm] = useState<{ id: number | "new"; label: string; url: string } | null>(null);
+  const [srcForm, setSrcForm] = useState<SrcForm | null>(null);
   const [sample, setSample] = useState<{ sourceId: number; text: string } | null>(null);
+  // Result of the in-form "Test" button (verify the URL + auth before saving).
+  const [srcTest, setSrcTest] = useState<{
+    loading: boolean;
+    ok?: boolean;
+    status?: number;
+    error?: string;
+    preview?: string;
+  } | null>(null);
 
   const saveSource = async () => {
     if (!srcForm || !srcForm.label.trim() || !srcForm.url.trim()) return;
-    const path = srcForm.id === "new" ? `${base}/metric-sources` : `${base}/metric-sources/${srcForm.id}`;
+    const isNew = srcForm.id === "new";
+    const body: Record<string, unknown> = {
+      label: srcForm.label.trim(),
+      url: srcForm.url.trim(),
+      authType: srcForm.authType,
+      authUsername: srcForm.authType === "basic" ? srcForm.authUsername.trim() || null : null,
+      authHeaderName: srcForm.authType === "header" ? srcForm.authHeaderName.trim() || null : null,
+    };
+    // Secret: send only when typed. Blank on edit keeps the stored value; blank
+    // on create / when auth is "none" clears it.
+    const secret = srcForm.authHeaderValue;
+    if (srcForm.authType === "none") body.authHeaderValue = null;
+    else if (secret !== "" || isNew) body.authHeaderValue = secret || null;
+    const path = isNew ? `${base}/metric-sources` : `${base}/metric-sources/${srcForm.id}`;
     const res = await fetch(path, {
-      method: srcForm.id === "new" ? "POST" : "PATCH",
+      method: isNew ? "POST" : "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ label: srcForm.label.trim(), url: srcForm.url.trim() }),
+      body: JSON.stringify(body),
     });
     if (res.ok) {
       setSrcForm(null);
@@ -93,15 +141,74 @@ export function MetricRulesClient({
     await fetch(`${base}/metric-sources/${id}`, { method: "DELETE" });
     router.refresh();
   };
+  // Scrape server-side (uses the stored secret) so the token never round-trips.
   const fetchSample = async (s: Source) => {
     setSample({ sourceId: s.id, text: "…" });
-    const res = await fetch("/api/monitors/sample", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ url: s.url, method: "GET" }),
-    });
+    const res = await fetch(`${base}/metric-sources/${s.id}/sample`, { method: "POST" });
     const j = await res.json().catch(() => ({}));
     setSample({ sourceId: s.id, text: typeof j.body === "string" ? j.body : JSON.stringify(j, null, 2) });
+  };
+  const editSource = (s: Source) => {
+    setSrcTest(null);
+    setSrcForm({
+      id: s.id,
+      label: s.label,
+      url: s.url,
+      authType: s.authType ?? "none",
+      authUsername: s.authUsername ?? "",
+      authHeaderName: s.authHeaderName ?? "",
+      authHeaderValue: "",
+      hasAuthSecret: s.hasAuthSecret,
+    });
+  };
+
+  // Hit the endpoint with the values currently in the form — before saving — so
+  // the operator can confirm the URL + credentials actually reach it.
+  const testEndpoint = async () => {
+    if (!srcForm || !srcForm.url.trim()) return;
+    setSrcTest({ loading: true });
+    // Editing an existing source whose stored secret is left blank (= keep):
+    // test via the saved source so the stored secret is used server-side.
+    const keepStored =
+      srcForm.id !== "new" &&
+      srcForm.hasAuthSecret &&
+      srcForm.authType !== "none" &&
+      srcForm.authHeaderValue === "";
+    try {
+      const res = keepStored
+        ? await fetch(`${base}/metric-sources/${srcForm.id}/sample`, { method: "POST" })
+        : await fetch("/api/monitors/sample", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              url: srcForm.url.trim(),
+              method: "GET",
+              authType: srcForm.authType,
+              authUsername:
+                srcForm.authType === "basic" ? srcForm.authUsername.trim() : undefined,
+              authHeaderName:
+                srcForm.authType === "header" ? srcForm.authHeaderName.trim() : undefined,
+              authHeaderValue:
+                srcForm.authType === "none" ? undefined : srcForm.authHeaderValue,
+            }),
+          });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        // Our own route rejected the request (e.g. invalid URL).
+        setSrcTest({ loading: false, error: j.error ?? `request rejected (HTTP ${res.status})` });
+      } else if (j.fetchError) {
+        setSrcTest({ loading: false, error: j.fetchError });
+      } else {
+        setSrcTest({
+          loading: false,
+          ok: !!j.ok,
+          status: j.status,
+          preview: typeof j.body === "string" ? j.body.slice(0, 600) : undefined,
+        });
+      }
+    } catch (e) {
+      setSrcTest({ loading: false, error: (e as Error).message });
+    }
   };
 
   // --- rules ---
@@ -167,7 +274,10 @@ export function MetricRulesClient({
   return (
     <div className="space-y-6">
       <p className="text-sm text-[var(--muted)]">
-        Scrape Prometheus endpoints (one or more) and alert on metrics. A breach opens a{" "}
+        Scrape Prometheus endpoints (one or more) and alert on metrics. Each
+        endpoint can carry its own auth header; leave it on{" "}
+        <span className="font-mono text-xs">None</span> to reuse the
+        monitor&apos;s credentials. A breach opens a{" "}
         <span className="font-mono text-xs">metric</span> incident; the monitor stays UP.
       </p>
 
@@ -180,26 +290,111 @@ export function MetricRulesClient({
           <button
             type="button"
             className="btn btn-ghost text-sm"
-            onClick={() => setSrcForm({ id: "new", label: "", url: "" })}
+            onClick={() => {
+              setSrcTest(null);
+              setSrcForm({ ...EMPTY_SRC, id: "new" });
+            }}
           >
             <Plus className="w-4 h-4" /> Add endpoint
           </button>
         </div>
 
         {srcForm && (
-          <div className="card p-3 grid grid-cols-1 sm:grid-cols-[1fr_2fr_auto] gap-2 items-end">
-            <label className="block text-sm">
-              <span>Label</span>
-              <input className="field-input" value={srcForm.label} onChange={(e) => setSrcForm({ ...srcForm, label: e.target.value })} placeholder="billing-svc" />
-            </label>
-            <label className="block text-sm">
-              <span>Prometheus URL</span>
-              <input className="field-input" value={srcForm.url} onChange={(e) => setSrcForm({ ...srcForm, url: e.target.value })} placeholder="https://billing/actuator/prometheus" />
-            </label>
-            <div className="flex gap-2">
-              <button type="button" onClick={saveSource} className="btn btn-primary">Save</button>
-              <button type="button" onClick={() => setSrcForm(null)} className="btn btn-ghost">Cancel</button>
+          <div className="card p-4 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_2fr] gap-3">
+              <label className="block text-sm">
+                <span>Label</span>
+                <input className="field-input" value={srcForm.label} onChange={(e) => setSrcForm({ ...srcForm, label: e.target.value })} placeholder="billing-svc" />
+              </label>
+              <label className="block text-sm">
+                <span>Prometheus URL</span>
+                <input className="field-input" value={srcForm.url} onChange={(e) => setSrcForm({ ...srcForm, url: e.target.value })} placeholder="https://billing/actuator/prometheus" />
+              </label>
             </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="block text-sm">
+                <span>Authentication</span>
+                <select
+                  className="field-input"
+                  value={srcForm.authType}
+                  onChange={(e) => setSrcForm({ ...srcForm, authType: e.target.value as AuthType })}
+                >
+                  <option value="none">None (inherit monitor)</option>
+                  <option value="header">Custom header</option>
+                  <option value="bearer">Bearer token</option>
+                  <option value="basic">Basic auth</option>
+                </select>
+              </label>
+
+              {srcForm.authType === "header" && (
+                <label className="block text-sm">
+                  <span>Header name</span>
+                  <input className="field-input" value={srcForm.authHeaderName} onChange={(e) => setSrcForm({ ...srcForm, authHeaderName: e.target.value })} placeholder="X-Metrics-Token" />
+                </label>
+              )}
+              {srcForm.authType === "basic" && (
+                <label className="block text-sm">
+                  <span>Username</span>
+                  <input className="field-input" value={srcForm.authUsername} onChange={(e) => setSrcForm({ ...srcForm, authUsername: e.target.value })} placeholder="user" autoComplete="off" />
+                </label>
+              )}
+              {srcForm.authType !== "none" && (
+                <label className="block text-sm">
+                  <span>
+                    {srcForm.authType === "header"
+                      ? "Header value"
+                      : srcForm.authType === "bearer"
+                        ? "Token"
+                        : "Password"}
+                  </span>
+                  <input
+                    className="field-input"
+                    type="password"
+                    value={srcForm.authHeaderValue}
+                    onChange={(e) => setSrcForm({ ...srcForm, authHeaderValue: e.target.value })}
+                    placeholder={srcForm.hasAuthSecret ? "•••••• (unchanged)" : "secret"}
+                    autoComplete="off"
+                  />
+                </label>
+              )}
+            </div>
+
+            <div className="flex gap-2 items-center">
+              <button type="button" onClick={saveSource} className="btn btn-primary">Save</button>
+              <button
+                type="button"
+                onClick={testEndpoint}
+                disabled={!srcForm.url.trim() || srcTest?.loading}
+                className="btn btn-ghost"
+              >
+                <Plug className="w-4 h-4" /> {srcTest?.loading ? "Testing…" : "Test"}
+              </button>
+              <button type="button" onClick={() => { setSrcForm(null); setSrcTest(null); }} className="btn btn-ghost">Cancel</button>
+            </div>
+
+            {srcTest && !srcTest.loading && (
+              <div className="space-y-2">
+                {srcTest.error ? (
+                  <p className="text-sm text-red-600 flex items-center gap-1.5">
+                    <XCircle className="w-4 h-4 shrink-0" /> Could not reach endpoint: {srcTest.error}
+                  </p>
+                ) : srcTest.ok ? (
+                  <p className="text-sm text-emerald-600 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" /> Reached — HTTP {srcTest.status}
+                  </p>
+                ) : (
+                  <p className="text-sm text-amber-600 flex items-center gap-1.5">
+                    <XCircle className="w-4 h-4 shrink-0" /> HTTP {srcTest.status} — reachable, but the request was rejected (check auth).
+                  </p>
+                )}
+                {srcTest.preview && (
+                  <pre className="max-h-40 overflow-auto rounded-lg border border-[var(--border)] bg-black/[0.03] dark:bg-white/[0.04] p-2.5 text-xs">
+                    {srcTest.preview}
+                  </pre>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -211,11 +406,16 @@ export function MetricRulesClient({
               <li key={s.id} className="flex items-center justify-between gap-2 py-2">
                 <div className="min-w-0">
                   <span className="font-medium">{s.label}</span>
+                  {s.authType && s.authType !== "none" && (
+                    <span className="badge badge-muted ml-2 inline-flex items-center gap-1">
+                      <KeyRound className="w-3 h-3" /> {s.authType}
+                    </span>
+                  )}
                   <span className="font-mono text-xs text-[var(--muted)] ml-2 truncate">{s.url}</span>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <button type="button" onClick={() => fetchSample(s)} className="btn btn-ghost text-xs px-2 py-1">Sample</button>
-                  <button type="button" onClick={() => setSrcForm({ id: s.id, label: s.label, url: s.url })} className="btn btn-ghost px-2 py-1" aria-label="Edit"><Pencil className="w-4 h-4" /></button>
+                  <button type="button" onClick={() => editSource(s)} className="btn btn-ghost px-2 py-1" aria-label="Edit"><Pencil className="w-4 h-4" /></button>
                   <button type="button" onClick={() => deleteSource(s.id)} className="btn btn-ghost px-2 py-1" aria-label="Delete"><Trash2 className="w-4 h-4" /></button>
                 </div>
               </li>

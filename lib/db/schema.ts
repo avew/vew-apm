@@ -156,6 +156,15 @@ export const metricSources = sqliteTable(
       .references(() => monitors.id, { onDelete: "cascade" }),
     label: text("label").notNull(), // friendly name shown on rules + charts
     url: text("url").notNull(), // e.g. https://billing/actuator/prometheus
+    // Per-endpoint request auth (a scrape target often differs from the monitor's
+    // own URL and needs its own credentials — e.g. a shared X-Metrics-Token
+    // header). null / "none" authType → inherit the monitor's auth. Mirrors the
+    // monitors auth columns; authHeaderValue is the secret, stored plaintext and
+    // never shipped to the client (blank on edit = keep).
+    authType: text("auth_type"), // "none" | "basic" | "header" | "bearer" | null
+    authUsername: text("auth_username"),
+    authHeaderName: text("auth_header_name"),
+    authHeaderValue: text("auth_header_value"),
     createdAt: ts("created_at"),
   },
   (t) => [index("metric_sources_monitor_idx").on(t.monitorId)],

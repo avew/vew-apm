@@ -392,7 +392,16 @@ export default async function MonitorDetail({
         />
         <MetricRulesClient
           monitorId={monitorId}
-          sources={metricSources.map((s) => ({ id: s.id, label: s.label, url: s.url }))}
+          sources={metricSources.map((s) => ({
+            id: s.id,
+            label: s.label,
+            url: s.url,
+            authType: (s.authType as "none" | "basic" | "header" | "bearer" | null) ?? "none",
+            authUsername: s.authUsername,
+            authHeaderName: s.authHeaderName,
+            // never ship the secret to the client — only whether one is stored
+            hasAuthSecret: s.authHeaderValue != null && s.authHeaderValue !== "",
+          }))}
           initial={metricRules.map((r) => ({
             id: r.id,
             sourceId: r.sourceId,
