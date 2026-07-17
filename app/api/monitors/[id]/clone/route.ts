@@ -67,7 +67,15 @@ export async function POST(
   for (const s of sources) {
     const [ns] = await db
       .insert(schema.metricSources)
-      .values({ monitorId: clone.id, label: s.label, url: s.url })
+      .values({
+        monitorId: clone.id,
+        label: s.label,
+        url: s.url,
+        authType: s.authType,
+        authUsername: s.authUsername,
+        authHeaderName: s.authHeaderName,
+        authHeaderValue: s.authHeaderValue,
+      })
       .returning({ id: schema.metricSources.id });
     sourceIdMap.set(s.id, ns.id);
   }

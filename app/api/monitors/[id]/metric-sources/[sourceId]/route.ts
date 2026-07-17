@@ -7,6 +7,12 @@ import { and, eq } from "drizzle-orm";
 const PatchBody = z.object({
   label: z.string().min(1).max(120).optional(),
   url: z.string().url().optional(),
+  authType: z.enum(["none", "basic", "header", "bearer"]).optional(),
+  authUsername: z.string().max(200).nullable().optional(),
+  authHeaderName: z.string().max(200).nullable().optional(),
+  // Secret: omit to keep the stored value; send a string to replace it. Because
+  // it's its own column, an absent field leaves the stored secret untouched.
+  authHeaderValue: z.string().max(4000).nullable().optional(),
 });
 
 async function ids(ctx: { params: Promise<{ id: string; sourceId: string }> }) {
@@ -33,6 +39,13 @@ export async function PATCH(
   const updates: Record<string, unknown> = {};
   if (body.data.label !== undefined) updates.label = body.data.label;
   if (body.data.url !== undefined) updates.url = body.data.url;
+  if (body.data.authType !== undefined) updates.authType = body.data.authType;
+  if (body.data.authUsername !== undefined) updates.authUsername = body.data.authUsername;
+  if (body.data.authHeaderName !== undefined)
+    updates.authHeaderName = body.data.authHeaderName;
+  // Only overwrite the secret when the field is present (blank on edit = keep).
+  if (body.data.authHeaderValue !== undefined)
+    updates.authHeaderValue = body.data.authHeaderValue;
   const db = getDb();
   await db
     .update(schema.metricSources)
