@@ -53,6 +53,8 @@ yarn-error.log*
 /blob-report
 /playwright/.cache
 /e2e/.auth
+# playwright MCP scratch (snapshots/screenshots from interactive verification)
+/.playwright-mcp
 
 # vercel
 .vercel
